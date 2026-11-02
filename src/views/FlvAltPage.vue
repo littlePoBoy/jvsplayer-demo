@@ -1,0 +1,192 @@
+<script setup>
+import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
+import PlayerShell from '../components/PlayerShell.vue'
+import InfoPanel from '../components/InfoPanel.vue'
+import { loadScript } from '../utils/scriptLoader.js'
+import { probeCapabilities } from '../utils/capability.js'
+import { isAllowedStreamUrl } from '../utils/url.js'
+import { formatDuration } from '../utils/format.js'
+
+// FLV 对照页（方案 B）：h265web.js，展示硬解（WebCodec）→软解（WASM）的「能播」上限。
+// 与 FLV 主路径（mpegts.js）页面级隔离：独立实例、独立生命周期，方便整页抄录。
+const H265WEB_BASE = `${import.meta.env.BASE_URL}h265web/`
+const PLAYER_ID = 'flv-alt-stage'
+
+const stageEl = useTemplateRef('stageEl')
+const url = ref('')
+const volume = ref(1)
+const core = ref('')
+const hasPlayer = ref(false)
+const isPaused = ref(false)
+const status = ref({ text: '未播放', kind: '' })
+const probeInfo = ref(null)
+const playPts = ref(null)
+const capRows = ref([])
+
+let player = null
+
+function setStatus(text, kind = '') {
+  status.value = { text, kind }
+}
+
+const urlRows = computed(() => [
+  { label: '播放地址', value: url.value || '（未填写）', copy: true },
+  { label: '解码内核', value: core.value === '' ? 'Auto（硬解优先，失败落软解）' : core.value },
+])
+
+const videoRows = computed(() => {
+  const mi = probeInfo.value
+  return [
+    { label: '视频编码', value: mi?.codec ?? '-' },
+    { label: '封装格式', value: mi?.fmt ?? '-' },
+    { label: '帧率', value: mi?.fps ? `${mi.fps} fps` : '-' },
+    { label: '音频采样率', value: mi?.sampleRate ? `${mi.sampleRate} Hz` : '-' },
+    { label: '总时长', value: mi?.duration > 0 ? formatDuration(mi.duration) : '直播/未知' },
+    { label: '当前进度', value: playPts.value === null ? '-' : `${formatDuration(playPts.value)}` },
+    { label: '播放状态', value: status.value.text },
+  ]
+})
+
+function releasePlayer() {
+  if (player) {
+    player.release()
+    player = null
+  }
+  hasPlayer.value = false
+  isPaused.value = false
+}
+
+async function play() {
+  const target = url.value.trim()
+  if (!isAllowedStreamUrl(target)) {
+    setStatus('播放地址无效：仅支持 http(s)/ws(s) 协议。', 'is-error')
+    return
+  }
+  setStatus('加载播放器…', '')
+  await loadScript(`${H265WEB_BASE}h265web.js`)
+  releasePlayer()
+
+  const instance = window.H265webjsPlayer()
+  instance.video_probe_callback = (mediaInfo) => {
+    probeInfo.value = { ...mediaInfo }
+  }
+  instance.on_ready_show_done_callback = () => {
+    setStatus('已就绪，播放中…', 'is-ok')
+  }
+  instance.on_play_time = (pts) => {
+    playPts.value = Number(pts) || 0
+  }
+  instance.on_play_finished = () => {
+    isPaused.value = true
+    setStatus('播放完毕', '')
+  }
+  instance.on_error_callback = (errorPayload) => {
+    setStatus(`播放失败：${typeof errorPayload === 'string' ? errorPayload : JSON.stringify(errorPayload)}`, 'is-error')
+  }
+
+  const width = stageEl.value?.clientWidth || 960
+  const height = stageEl.value?.clientHeight || 540
+  const buildOk = instance.build({
+    player_id: PLAYER_ID,
+    wasm_js_uri: `${H265WEB_BASE}h265web_wasm.js`,
+    wasm_wasm_uri: `${H265WEB_BASE}h265web_wasm.wasm`,
+    width,
+    height,
+    color: 'black',
+    auto_play: true,
+    ignore_audio: false,
+    core: core.value || null,
+  })
+  if (!buildOk) {
+    instance.release()
+    setStatus('播放器构建失败（build 返回 false）。', 'is-error')
+    return
+  }
+  player = instance
+  hasPlayer.value = true
+  probeInfo.value = null
+  playPts.value = null
+  // 浏览器自动播放策略：在用户手势内通知播放器，再加载媒体。
+  instance.notify_user_gesture()
+  instance.set_voice(Number(volume.value))
+  instance.load_media(target)
+  setStatus('加载媒体…', 'is-ok')
+}
+
+function togglePause() {
+  if (!player) {
+    return
+  }
+  if (isPaused.value) {
+    player.notify_user_gesture()
+    player.play()
+    isPaused.value = false
+    setStatus('播放中…', 'is-ok')
+  } else {
+    player.pause()
+    isPaused.value = true
+    setStatus('已暂停', '')
+  }
+}
+
+function applyVolume() {
+  player?.set_voice(Number(volume.value))
+}
+
+function goFullscreen() {
+  player?.fullScreen()
+}
+
+onMounted(async () => {
+  capRows.value = await probeCapabilities()
+})
+
+onUnmounted(releasePlayer)
+</script>
+
+<template>
+  <PlayerShell>
+    <template #top>
+      <input
+        v-model="url"
+        class="input url-input"
+        type="text"
+        placeholder="粘贴 HTTP-FLV / WS-FLV 播放地址（h265web.js 对照）"
+        @keyup.enter="play"
+      />
+      <span class="field-label">解码内核</span>
+      <select v-model="core" class="select">
+        <option value="">Auto</option>
+        <option value="webcodec_hevc">WebCodec（硬解）</option>
+        <option value="wasm_hevc">WASM（软解）</option>
+      </select>
+      <button class="btn btn-primary" type="button" @click="play">播放</button>
+      <button class="btn" type="button" :disabled="!hasPlayer" @click="releasePlayer">停止</button>
+    </template>
+
+    <template #stage>
+      <div :id="PLAYER_ID" ref="stageEl" class="stage-host"></div>
+    </template>
+
+    <template #controls>
+      <div class="control-bar">
+        <button class="btn" type="button" :disabled="!hasPlayer" @click="togglePause">
+          {{ isPaused ? '播放' : '暂停' }}
+        </button>
+        <span class="field-label">音量</span>
+        <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
+        <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
+      </div>
+    </template>
+
+    <template #status>
+      <span :class="status.kind">{{ status.text }}</span>
+    </template>
+
+    <template #info>
+      <InfoPanel title="播放地址" :rows="urlRows" />
+      <InfoPanel title="视频信息" :rows="videoRows" />
+      <InfoPanel title="浏览器 / 解码能力" :rows="capRows" />
+    </template>
+  </PlayerShell>
+</template>

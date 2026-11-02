@@ -1,0 +1,27 @@
+{
+  "name": "jvsplayer-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "公司平台 Web 播放参考 Demo：websdk 私协 + 开源 FLV/HLS 主路径与 h265web.js 对照",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "hls.js": "^1.7.4",
+    "mpegts.js": "^1.8.2",
+    "vue": "^3.5.44",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.10",
+    "@vue/test-utils": "^2.5.1",
+    "happy-dom": "^21.0.4",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
