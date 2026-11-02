@@ -15,6 +15,7 @@ const PLAYER_ID = 'flv-alt-stage'
 const stageEl = useTemplateRef('stageEl')
 const url = ref('')
 const volume = ref(1)
+const isMuted = ref(false)
 const core = ref('')
 const hasPlayer = ref(false)
 const isPaused = ref(false)
@@ -103,7 +104,7 @@ async function play() {
   playPts.value = null
   // 浏览器自动播放策略：在用户手势内通知播放器，再加载媒体。
   instance.notify_user_gesture()
-  instance.set_voice(Number(volume.value))
+  applyVoice()
   instance.load_media(target)
   setStatus('加载媒体…', 'is-ok')
 }
@@ -124,8 +125,20 @@ function togglePause() {
   }
 }
 
+function applyVoice() {
+  // h265web.js 无独立静音接口，静音即 set_voice(0)，滑杆值仍保留
+  player?.set_voice(isMuted.value ? 0 : Number(volume.value))
+}
+
 function applyVolume() {
-  player?.set_voice(Number(volume.value))
+  // 拖动音量滑杆自动取消静音
+  isMuted.value = false
+  applyVoice()
+}
+
+function toggleMute() {
+  isMuted.value = !isMuted.value
+  applyVoice()
 }
 
 function goFullscreen() {
@@ -163,19 +176,17 @@ onUnmounted(releasePlayer)
       <div :id="PLAYER_ID" ref="stageEl" class="stage-host"></div>
     </template>
 
-    <template #controls>
-      <div class="control-bar">
-        <button class="btn" type="button" :disabled="!hasPlayer" @click="togglePause">
-          {{ isPaused ? '播放' : '暂停' }}
-        </button>
-        <span class="field-label">音量</span>
-        <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
-        <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
-      </div>
-    </template>
-
-    <template #status>
-      <span :class="status.kind">{{ status.text }}</span>
+    <template #overlay>
+      <!-- h265web.js 无截图/录像能力，不渲染对应按钮 -->
+      <button class="btn" type="button" :disabled="!hasPlayer" @click="togglePause">
+        {{ isPaused ? '播放' : '暂停' }}
+      </button>
+      <button class="btn" type="button" @click="toggleMute">
+        {{ isMuted ? '取消静音' : '静音' }}
+      </button>
+      <span class="field-label">音量</span>
+      <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
+      <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
     </template>
 
     <template #info>

@@ -1,6 +1,7 @@
 <script setup>
 // 播放页共用 UI 骨架（方案 §2.2）：
-// 顶=播放地址等控件；左=播放区+底栏控件；右=信息栏。仅布局，不承载任何播放器逻辑。
+// 顶=播放地址等控件；左=播放区（右下角悬浮控件条，悬停显示）+状态行（按需）；右=信息栏。
+// 仅布局，不承载任何播放器逻辑。
 </script>
 
 <template>
@@ -12,11 +13,11 @@
       <section class="stage-col">
         <div class="stage">
           <slot name="stage" />
+          <div v-if="$slots.overlay" class="stage-overlay">
+            <slot name="overlay" />
+          </div>
         </div>
-        <div class="controls-wrap">
-          <slot name="controls" />
-        </div>
-        <div class="status-line">
+        <div v-if="$slots.status" class="status-line">
           <slot name="status" />
         </div>
       </section>

@@ -11,6 +11,7 @@ const videoEl = useTemplateRef('videoEl')
 const url = ref('')
 const isLive = ref(true)
 const volume = ref(1)
+const isMuted = ref(false)
 const hasPlayer = ref(false)
 const isPaused = ref(false)
 const status = ref({ text: '未播放', kind: '' })
@@ -111,13 +112,24 @@ function togglePause() {
 }
 
 function applyVolume() {
+  // 拖动音量滑杆自动取消静音
+  isMuted.value = false
   if (videoEl.value) {
+    videoEl.value.muted = false
     videoEl.value.volume = Number(volume.value)
   }
 }
 
+function toggleMute() {
+  isMuted.value = !isMuted.value
+  if (videoEl.value) {
+    videoEl.value.muted = isMuted.value
+  }
+}
+
 function goFullscreen() {
-  videoEl.value?.requestFullscreen?.()
+  // 全屏 .stage（悬浮条的祖先）而不是 video，保证全屏内悬浮条仍可操作
+  videoEl.value?.parentElement?.requestFullscreen?.()
 }
 
 onMounted(async () => {
@@ -149,19 +161,17 @@ onUnmounted(destroyPlayer)
       <video ref="videoEl"></video>
     </template>
 
-    <template #controls>
-      <div class="control-bar">
-        <button class="btn" type="button" :disabled="!hasPlayer" @click="togglePause">
-          {{ isPaused ? '播放' : '暂停' }}
-        </button>
-        <span class="field-label">音量</span>
-        <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
-        <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
-      </div>
-    </template>
-
-    <template #status>
-      <span :class="status.kind">{{ status.text }}</span>
+    <template #overlay>
+      <!-- mpegts.js 无截图/录像能力，不渲染对应按钮 -->
+      <button class="btn" type="button" :disabled="!hasPlayer" @click="togglePause">
+        {{ isPaused ? '播放' : '暂停' }}
+      </button>
+      <button class="btn" type="button" @click="toggleMute">
+        {{ isMuted ? '取消静音' : '静音' }}
+      </button>
+      <span class="field-label">音量</span>
+      <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
+      <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
     </template>
 
     <template #info>
