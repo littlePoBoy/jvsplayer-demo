@@ -11,7 +11,7 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
 })
 
-const emit = defineEmits({ seek: [timestamp] })
+const emit = defineEmits(['seek'])
 
 const hasRange = computed(
   () => props.startTs !== null && props.endTs !== null && props.endTs > props.startTs,
