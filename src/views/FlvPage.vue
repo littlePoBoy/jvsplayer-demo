@@ -24,11 +24,6 @@ function setStatus(text, kind = '') {
   status.value = { text, kind }
 }
 
-const urlRows = computed(() => [
-  { label: '播放地址', value: url.value || '（未填写）', copy: true },
-  { label: '流类型', value: isLive.value ? '直播（isLive=true）' : '点播（isLive=false）' },
-])
-
 const videoRows = computed(() => {
   const mi = mediaInfo.value
   const st = stats.value
@@ -170,7 +165,6 @@ onUnmounted(destroyPlayer)
     </template>
 
     <template #info>
-      <InfoPanel title="播放地址" :rows="urlRows" />
       <InfoPanel title="视频信息" :rows="videoRows" />
       <InfoPanel title="浏览器 / 解码能力" :rows="capRows" />
     </template>

@@ -1,27 +1,9 @@
 <script setup>
-import { ref } from 'vue'
-
-// 行：{ label, value, copy? } —— copy=true 时展示「复制」按钮（如播放地址）
+// 行：{ label, value }
 const props = defineProps({
   title: { type: String, required: true },
   rows: { type: Array, default: () => [] },
 })
-
-const copiedLabel = ref('')
-
-async function copyRow(row) {
-  try {
-    await navigator.clipboard.writeText(String(row.value))
-    copiedLabel.value = row.label
-    setTimeout(() => {
-      if (copiedLabel.value === row.label) {
-        copiedLabel.value = ''
-      }
-    }, 1500)
-  } catch {
-    copiedLabel.value = ''
-  }
-}
 </script>
 
 <template>
@@ -32,9 +14,6 @@ async function copyRow(row) {
         <dt>{{ row.label }}</dt>
         <dd :title="String(row.value ?? '')">
           <span class="info-value">{{ row.value ?? '-' }}</span>
-          <button v-if="row.copy" class="btn btn-copy" type="button" @click="copyRow(row)">
-            {{ copiedLabel === row.label ? '已复制' : '复制' }}
-          </button>
         </dd>
       </div>
     </dl>
@@ -89,11 +68,5 @@ async function copyRow(row) {
   min-width: 0;
   word-break: break-all;
   user-select: text;
-}
-
-.btn-copy {
-  flex: none;
-  padding: 1px 8px;
-  font-size: 12px;
 }
 </style>

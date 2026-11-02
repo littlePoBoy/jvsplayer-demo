@@ -124,12 +124,6 @@ function handleProgressMsg(msg) {
   }
 }
 
-const urlRows = computed(() => [
-  { label: '播放地址', value: playUrl.value || '（未填写）', copy: true },
-  { label: '对讲地址', value: talkUrl.value || '（未填写）', copy: true },
-  { label: '下载地址', value: downloadUrl.value || '（未填写）', copy: true },
-])
-
 const videoRows = computed(() => [
   { label: '业务形态', value: mode.value === 'live' ? '直播（界面）' : '回放（界面）' },
   { label: '解码器', value: codecReady.value ? '已就绪（codec_loaded）' : '加载中…' },
@@ -547,7 +541,6 @@ onUnmounted(() => {
     </template>
 
     <template #info>
-      <InfoPanel title="地址" :rows="urlRows" />
       <InfoPanel title="视频信息" :rows="videoRows" />
       <InfoPanel title="浏览器 / 解码能力" :rows="capRows" />
     </template>

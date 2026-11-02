@@ -12,7 +12,6 @@ const url = ref('')
 const volume = ref(1)
 const hasPlayer = ref(false)
 const isPaused = ref(false)
-const isLiveStream = ref(null)
 const status = ref({ text: '未播放', kind: '' })
 const levelInfo = ref(null)
 const capRows = ref([])
@@ -22,14 +21,6 @@ let hls = null
 function setStatus(text, kind = '') {
   status.value = { text, kind }
 }
-
-const urlRows = computed(() => [
-  { label: '播放地址', value: url.value || '（未填写）', copy: true },
-  {
-    label: '流类型',
-    value: isLiveStream.value === null ? '（播放后自动识别）' : isLiveStream.value ? '直播' : '点播',
-  },
-])
 
 const videoRows = computed(() => {
   const li = levelInfo.value
@@ -56,10 +47,6 @@ function onManifestParsed(_event, data) {
     levelCount: levels.length,
     currentLevel: 0,
   }
-}
-
-function onLevelLoaded(_event, data) {
-  isLiveStream.value = Boolean(data.details?.live)
 }
 
 function onLevelSwitched(_event, data) {
@@ -93,7 +80,6 @@ function destroyPlayer() {
   }
   hasPlayer.value = false
   isPaused.value = false
-  isLiveStream.value = null
 }
 
 function play() {
@@ -108,7 +94,6 @@ function play() {
   if (Hls.isSupported()) {
     const instance = new Hls({ enableWorker: true })
     instance.on(Hls.Events.MANIFEST_PARSED, onManifestParsed)
-    instance.on(Hls.Events.LEVEL_LOADED, onLevelLoaded)
     instance.on(Hls.Events.LEVEL_SWITCHED, onLevelSwitched)
     instance.on(Hls.Events.ERROR, onError)
     instance.loadSource(target)
@@ -199,7 +184,6 @@ onUnmounted(destroyPlayer)
     </template>
 
     <template #info>
-      <InfoPanel title="播放地址" :rows="urlRows" />
       <InfoPanel title="视频信息" :rows="videoRows" />
       <InfoPanel title="浏览器 / 解码能力" :rows="capRows" />
     </template>

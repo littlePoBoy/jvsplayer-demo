@@ -30,11 +30,6 @@ function setStatus(text, kind = '') {
   status.value = { text, kind }
 }
 
-const urlRows = computed(() => [
-  { label: '播放地址', value: url.value || '（未填写）', copy: true },
-  { label: '解码内核', value: core.value === '' ? 'Auto（硬解优先，失败落软解）' : core.value },
-])
-
 const videoRows = computed(() => {
   const mi = probeInfo.value
   return [
@@ -185,7 +180,6 @@ onUnmounted(releasePlayer)
     </template>
 
     <template #info>
-      <InfoPanel title="播放地址" :rows="urlRows" />
       <InfoPanel title="视频信息" :rows="videoRows" />
       <InfoPanel title="浏览器 / 解码能力" :rows="capRows" />
     </template>
