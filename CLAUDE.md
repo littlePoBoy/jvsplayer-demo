@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. **不做统一 Facade**：不同协议/方案各用独立页面，禁止抽象公共播放器接口。「一协议一页」是有意为之——方便开发者只收藏/抄录自己需要的一页。
 2. **页面级隔离**：websdk 与 mpegts.js / hls.js / h265web.js 不共享播放实例。公司私协 / 对讲 / 回放业务只用 websdk，不与开源方案混用一套实例。
 3. **只实现方案标注「要实现」的页面**；方案第 5 节的参考候选（Jessibuca Pro、libmedia、EasyPlayer 系、Jessibuca 开源版、金山 h265webplayer 等）仅写入说明页文档，不进代码。
+4. **不用谢单元测试**
 
 ## 页面清单
 
