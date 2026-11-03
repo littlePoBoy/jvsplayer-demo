@@ -5,13 +5,13 @@ import InfoPanel from '../components/InfoPanel.vue'
 import { loadScript } from '../utils/scriptLoader.js'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
-import { formatDateTime } from '../utils/format.js'
 
 // 私协页：公司 websdk（JVMP 私协）直播 / 回放 / 截图 / 录像。
 // 厂商要求：单 WebPlayer 实例承担全部业务；与开源方案页面级隔离。
 // 接口/事件严格按 websdk/demo的使用说明.md 书写，勿凭记忆改签名。
 const BASE_URL = import.meta.env.BASE_URL
 const POLL_INTERVAL_MS = 500
+const META_POLL_INTERVAL_MS = 1000
 
 const containerEl = useTemplateRef('containerEl')
 const playUrl = ref('')
@@ -25,11 +25,13 @@ const isTalking = ref(false)
 const isRecording = ref(false)
 const isDownloading = ref(false)
 const curTs = ref(null)
+const metaInfo = ref(null)
 const status = ref({ text: '初始化中…', kind: '' })
 const capRows = ref([])
 
 let webplayer = null
 let progressTimer = null
+let metaTimer = null
 
 function setStatus(text, kind = '') {
   status.value = { text, kind }
@@ -73,13 +75,43 @@ function handleProgressMsg(msg) {
   }
 }
 
-const videoRows = computed(() => [
-  { label: '业务形态', value: mode.value === 'live' ? '直播（界面）' : '回放（界面）' },
-  { label: '解码器', value: codecReady.value ? '已就绪（codec_loaded）' : '加载中…' },
-  { label: '播放状态', value: hasPlayer.value ? (isPaused.value ? '已暂停' : '播放中') : '未播放' },
-  { label: '当前帧时间', value: formatDateTime(curTs.value) },
-  { label: '录像', value: isRecording.value ? '录像中' : '关闭' },
-])
+// 流信息（与各播放页统一口径）。websdk 公开 API 未暴露流元数据（demo的使用说明.md 2.x/3.x
+// 无相关接口），取自内部 m_mediaMetadata（stream_client.bundle.js 解析后经 HandleMetaDataUpdate 存放）：
+// { v: { codecType, width, height, frameRate }, a: { codecType, sampleRate } }。
+// codecType 枚举经 bundle 核对：视频 1=H264 2=H265；音频 1=G711A 2=G711U 4=AAC。
+const VIDEO_CODEC_NAMES = { 1: 'H264', 2: 'H265' }
+const AUDIO_CODEC_NAMES = { 1: 'G711A', 2: 'G711U', 4: 'AAC' }
+
+// websdk 解码器自动链（wasm_decoder.bundle.js）：MSE(video标签) → WebCodec → WASM 软解；
+// 本页未指定 decodeType（=自动），实际解码器按右侧能力探测同序推断。
+const decodeMode = computed(() => {
+  const codecName = metaInfo.value ? VIDEO_CODEC_NAMES[metaInfo.value.v?.codecType] : null
+  if (!codecName) {
+    return '自动'
+  }
+  const cap = (label) => capRows.value.some((row) => row.label === label && row.value === '支持')
+  const codecTag = codecName === 'H265' ? 'H.265' : 'H.264'
+  if (cap(`MSE ${codecTag}`)) {
+    return '自动: MSE（video标签）'
+  }
+  if (cap(`WebCodecs ${codecTag}`)) {
+    return '自动: WebCodec（硬解）'
+  }
+  return '自动: WASM（软解）'
+})
+
+const videoRows = computed(() => {
+  const v = metaInfo.value?.v
+  const a = metaInfo.value?.a
+  return [
+    { label: '视频编码', value: v ? (VIDEO_CODEC_NAMES[v.codecType] ?? null) : null },
+    { label: '分辨率', value: v?.width ? `${v.width} × ${v.height}` : null },
+    { label: '帧率', value: v?.frameRate ? `${Math.round(v.frameRate * 100) / 100} fps` : null },
+    { label: '解码模式', value: decodeMode.value },
+    { label: '音频编码', value: metaInfo.value ? (a?.isValid ? (AUDIO_CODEC_NAMES[a.codecType] ?? null) : '无音频') : null },
+    { label: '音频采样率', value: a?.sampleRate ? `${a.sampleRate} Hz` : null },
+  ]
+})
 
 // ---------- 进度轮询（GetCurTimestamp 驱动自研进度条） ----------
 
@@ -103,6 +135,23 @@ function stopProgressPolling() {
   }
 }
 
+// ---------- 流信息轮询（内部 m_mediaMetadata，见 videoRows 注释） ----------
+
+function startMetaPolling() {
+  stopMetaPolling()
+  metaTimer = setInterval(() => {
+    const meta = webplayer?.m_player?.m_mediaMetadata ?? null
+    metaInfo.value = meta ? { v: { ...meta.v }, a: { ...meta.a } } : null
+  }, META_POLL_INTERVAL_MS)
+}
+
+function stopMetaPolling() {
+  if (metaTimer) {
+    clearInterval(metaTimer)
+    metaTimer = null
+  }
+}
+
 // ---------- 事件订阅（事件表见 demo的使用说明.md 第 3 节） ----------
 
 function wireEvents(instance) {
@@ -120,6 +169,8 @@ function wireEvents(instance) {
     isPaused.value = false
     isTalking.value = false // 直播模式 Stop 会连带关闭对讲
     stopProgressPolling()
+    stopMetaPolling()
+    metaInfo.value = null
     setStatus('播放已停止。', '')
   })
   instance.on('live_failed', (msg) => {
@@ -199,6 +250,8 @@ async function onPlay() {
     hasPlayer.value = true
     isPaused.value = false
     curTs.value = null
+    metaInfo.value = null
+    startMetaPolling()
     if (mode.value === 'vod') {
       startProgressPolling()
     }
@@ -222,6 +275,8 @@ function onStop() {
   }
   webplayer.Stop()
   stopProgressPolling()
+  stopMetaPolling()
+  metaInfo.value = null
   hasPlayer.value = false
   isPaused.value = false
   curTs.value = null
@@ -289,6 +344,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopProgressPolling()
+  stopMetaPolling()
   if (!webplayer) {
     return
   }
@@ -353,9 +409,9 @@ onUnmounted(() => {
       </button>
     </template>
 
-    <template #status>
+    <!-- <template #status>
       <span :class="status.kind">{{ status.text }}</span>
-    </template>
+    </template> -->
 
     <template #info>
       <InfoPanel title="视频信息" :rows="videoRows" />

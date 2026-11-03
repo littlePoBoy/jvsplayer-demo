@@ -5,6 +5,7 @@ import PlayerShell from '../components/PlayerShell.vue'
 import InfoPanel from '../components/InfoPanel.vue'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
+import { formatVideoCodecName, formatAudioCodecName } from '../utils/format.js'
 
 // FLV 主路径（方案 A）：mpegts.js 解封装 → MSE → <video>。硬解优先，不做软解兜底。
 const videoEl = useTemplateRef('videoEl')
@@ -25,24 +26,22 @@ function setStatus(text, kind = '') {
   status.value = { text, kind }
 }
 
+// 视频信息（与各播放页统一口径）：mpegts.js 仅走 MSE→<video>，解码模式固定为硬解
 const videoRows = computed(() => {
   const mi = mediaInfo.value
-  const st = stats.value
   return [
-    { label: '分辨率', value: mi ? `${mi.width}×${mi.height}` : '-' },
-    { label: '视频编码', value: mi?.videocodec ?? '-' },
-    { label: '音频编码', value: mi?.hasAudio ? (mi.audiocodec ?? '有') : '无音频' },
-    { label: '帧率', value: mi?.fps ? `${mi.fps} fps` : '-' },
-    { label: '已解码帧', value: st ? String(st.decodedFrames ?? '-') : '-' },
-    { label: '丢帧', value: st ? String(st.droppedFrames ?? '-') : '-' },
-    { label: '接收速率', value: st?.speed ? `${st.speed} KB/s` : '-' },
-    { label: '播放状态', value: status.value.text },
+    { label: '视频编码', value: formatVideoCodecName(mi?.videoCodec) },
+    { label: '分辨率', value: mi?.width ? `${mi.width} × ${mi.height}` : null },
+    { label: '帧率', value: mi?.fps ? `${Math.round(mi.fps * 100) / 100} fps` : null },
+    { label: '解码模式', value: 'MSE（video标签）' },
+    { label: '音频编码', value: mi?.hasAudio ? formatAudioCodecName(mi?.audioCodec) : '无音频' },
+    { label: '音频采样率', value: mi?.audioSampleRate ? `${mi.audioSampleRate} Hz` : null },
   ]
 })
 
 function onMediaInfo(mi) {
   mediaInfo.value = { ...mi }
-  const isHevc = /hev|hvc/i.test(mi.videocodec || '')
+  const isHevc = /hev|hvc/i.test(mi.videoCodec || '')
   const mseHevcOk = capRows.value.some((row) => row.label === 'MSE H.265' && row.value === '支持')
   if (isHevc && !mseHevcOk) {
     setStatus('视频为 H.265，但当前浏览器 MSE 不支持 HEVC 硬解。可换 Chrome/Edge、改推 H.264，或看「FLV 对照」页（h265web.js 软解）。', 'is-error')

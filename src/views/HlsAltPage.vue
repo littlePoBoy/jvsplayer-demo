@@ -5,7 +5,7 @@ import InfoPanel from '../components/InfoPanel.vue'
 import { loadScript } from '../utils/scriptLoader.js'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
-import { formatDuration } from '../utils/format.js'
+import { formatVideoCodecName, formatAudioCodecName } from '../utils/format.js'
 
 // HLS 对照页（方案 B）：h265web.js，展示硬解（WebCodec）→软解（WASM）的「能播」上限。
 // 与 HLS 主路径（hls.js）页面级隔离：独立实例、独立生命周期，方便整页抄录。
@@ -31,16 +31,36 @@ function setStatus(text, kind = '') {
   status.value = { text, kind }
 }
 
+// h265web.js 解码内核展示名（CORE_TYPE_* 常量见 h265web.js）
+function coreLabel(coreId) {
+  const labels = {
+    auto: '自动',
+    webcodec_hevc: 'WebCodec（硬解）',
+    wasm_hevc: 'WASM（软解）',
+    mse_hevc: 'MSE（video标签）',
+    mse_hls: 'MSE（video标签）',
+    mse_mpegts_new: 'MSE（video标签）',
+    mse_videojs: 'MSE（video标签）',
+    native_hls: '原生 HLS（video标签）',
+  }
+  return labels[coreId] ?? coreId
+}
+
+const decodeMode = computed(() => {
+  const wanted = coreLabel(core.value || 'auto')
+  const selected = probeInfo.value?.selectedCore
+  return selected ? `${wanted}: ${coreLabel(selected)}` : wanted
+})
+
 const videoRows = computed(() => {
   const mi = probeInfo.value
   return [
-    { label: '视频编码', value: mi?.codec ?? '-' },
-    { label: '封装格式', value: mi?.fmt ?? '-' },
-    { label: '帧率', value: mi?.fps ? `${mi.fps} fps` : '-' },
-    { label: '音频采样率', value: mi?.sampleRate ? `${mi.sampleRate} Hz` : '-' },
-    { label: '总时长', value: mi?.duration > 0 ? formatDuration(mi.duration) : '直播/未知' },
-    { label: '当前进度', value: playPts.value === null ? '-' : `${formatDuration(playPts.value)}` },
-    { label: '播放状态', value: status.value.text },
+    { label: '视频编码', value: formatVideoCodecName(mi?.codec) },
+    { label: '分辨率', value: mi?.w > 0 ? `${mi.w} × ${mi.h}` : null },
+    { label: '帧率', value: mi?.fps > 0 ? `${Math.round(mi.fps * 100) / 100} fps` : null },
+    { label: '解码模式', value: decodeMode.value },
+    { label: '音频编码', value: mi?.hasAudio ? formatAudioCodecName(mi?.audioCodecName) : '无音频' },
+    { label: '音频采样率', value: mi?.sampleRate > 0 ? `${mi.sampleRate} Hz` : null },
   ]
 })
 

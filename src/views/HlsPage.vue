@@ -5,6 +5,7 @@ import PlayerShell from '../components/PlayerShell.vue'
 import InfoPanel from '../components/InfoPanel.vue'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
+import { formatVideoCodecName, formatAudioCodecName } from '../utils/format.js'
 
 // HLS 主路径（方案 A）：hls.js 解封装 → MSE → <video>（Safari 走原生 HLS）。硬解优先，不做软解兜底。
 const videoEl = useTemplateRef('videoEl')
@@ -15,6 +16,7 @@ const hasPlayer = ref(false)
 const isPaused = ref(false)
 const status = ref({ text: '未播放', kind: '' })
 const levelInfo = ref(null)
+const decodePath = ref('') // 'mse' | 'native' | ''（未播放）
 const capRows = ref([])
 
 let hls = null
@@ -23,16 +25,21 @@ function setStatus(text, kind = '') {
   status.value = { text, kind }
 }
 
+// 视频信息（与各播放页统一口径）。音频采样率 hls.js 未暴露，显示 '-'。
+const DECODE_PATH_LABELS = {
+  mse: 'MSE（video标签）',
+  native: '原生 HLS（video标签）',
+}
+
 const videoRows = computed(() => {
   const li = levelInfo.value
   return [
-    { label: '分辨率', value: li ? `${li.width}×${li.height}` : '-' },
-    { label: '视频编码', value: li?.videoCodec ?? '-' },
-    { label: '音频编码', value: li?.audioCodec ?? '-' },
-    { label: '码率', value: li?.bitrate ? `${Math.round(li.bitrate / 1000)} kbps` : '-' },
-    { label: '清晰度档位', value: li ? `${li.levelCount} 档` : '-' },
-    { label: '当前档位', value: li ? `#${li.currentLevel}` : '-' },
-    { label: '播放状态', value: status.value.text },
+    { label: '视频编码', value: formatVideoCodecName(li?.videoCodec) },
+    { label: '分辨率', value: li?.width ? `${li.width} × ${li.height}` : null },
+    { label: '帧率', value: li?.frameRate ? `${Math.round(li.frameRate * 100) / 100} fps` : null },
+    { label: '解码模式', value: DECODE_PATH_LABELS[decodePath.value] ?? null },
+    { label: '音频编码', value: formatAudioCodecName(li?.audioCodec) },
+    { label: '音频采样率', value: null },
   ]
 })
 
@@ -42,8 +49,9 @@ function onManifestParsed(_event, data) {
   levelInfo.value = {
     width: first.width ?? 0,
     height: first.height ?? 0,
-    videoCodec: first.videoCodec ?? '-',
-    audioCodec: first.audioCodec ?? '-',
+    videoCodec: first.videoCodec ?? null,
+    audioCodec: first.audioCodec ?? null,
+    frameRate: first.frameRate ?? 0,
     bitrate: first.bitrate ?? 0,
     levelCount: levels.length,
     currentLevel: 0,
@@ -92,7 +100,9 @@ function play() {
   destroyPlayer()
   const video = videoEl.value
   levelInfo.value = null
+  decodePath.value = ''
   if (Hls.isSupported()) {
+    decodePath.value = 'mse'
     const instance = new Hls({ enableWorker: true })
     instance.on(Hls.Events.MANIFEST_PARSED, onManifestParsed)
     instance.on(Hls.Events.LEVEL_SWITCHED, onLevelSwitched)
@@ -101,6 +111,7 @@ function play() {
     instance.attachMedia(video)
     hls = instance
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    decodePath.value = 'native'
     video.src = target
     video.addEventListener('loadedmetadata', () => video.play().catch(() => {}), { once: true })
     setStatus('使用浏览器原生 HLS 播放（如 Safari）', 'is-ok')
