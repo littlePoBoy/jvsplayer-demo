@@ -19,16 +19,10 @@ const isMuted = ref(false)
 const core = ref('')
 const hasPlayer = ref(false)
 const isPaused = ref(false)
-const status = ref({ text: '未播放', kind: '' })
 const probeInfo = ref(null)
-const playPts = ref(null)
 const capRows = ref([])
 
 let player = null
-
-function setStatus(text, kind = '') {
-  status.value = { text, kind }
-}
 
 // h265web.js 解码内核展示名（CORE_TYPE_* 常量见 h265web.js）
 function coreLabel(coreId) {
@@ -75,10 +69,8 @@ function releasePlayer() {
 async function play() {
   const target = url.value.trim()
   if (!isAllowedStreamUrl(target)) {
-    setStatus('播放地址无效：仅支持 http(s)/ws(s) 协议。', 'is-error')
     return
   }
-  setStatus('加载播放器…', '')
   await loadScript(`${H265WEB_BASE}h265web.js`)
   releasePlayer()
 
@@ -86,18 +78,8 @@ async function play() {
   instance.video_probe_callback = (mediaInfo) => {
     probeInfo.value = { ...mediaInfo }
   }
-  instance.on_ready_show_done_callback = () => {
-    setStatus('已就绪，播放中…', 'is-ok')
-  }
-  instance.on_play_time = (pts) => {
-    playPts.value = Number(pts) || 0
-  }
   instance.on_play_finished = () => {
     isPaused.value = true
-    setStatus('播放完毕', '')
-  }
-  instance.on_error_callback = (errorPayload) => {
-    setStatus(`播放失败：${typeof errorPayload === 'string' ? errorPayload : JSON.stringify(errorPayload)}`, 'is-error')
   }
 
   const width = stageEl.value?.clientWidth || 960
@@ -115,18 +97,15 @@ async function play() {
   })
   if (!buildOk) {
     instance.release()
-    setStatus('播放器构建失败（build 返回 false）。', 'is-error')
     return
   }
   player = instance
   hasPlayer.value = true
   probeInfo.value = null
-  playPts.value = null
   // 浏览器自动播放策略：在用户手势内通知播放器，再加载媒体。
   instance.notify_user_gesture()
   applyVoice()
   instance.load_media(target)
-  setStatus('加载媒体…', 'is-ok')
 }
 
 function togglePause() {
@@ -137,11 +116,9 @@ function togglePause() {
     player.notify_user_gesture()
     player.play()
     isPaused.value = false
-    setStatus('播放中…', 'is-ok')
   } else {
     player.pause()
     isPaused.value = true
-    setStatus('已暂停', '')
   }
 }
 

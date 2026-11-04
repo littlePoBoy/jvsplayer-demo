@@ -15,16 +15,10 @@ const volume = ref(1)
 const isMuted = ref(false)
 const hasPlayer = ref(false)
 const isPaused = ref(false)
-const status = ref({ text: '未播放', kind: '' })
 const mediaInfo = ref(null)
-const stats = ref(null)
 const capRows = ref([])
 
 let player = null
-
-function setStatus(text, kind = '') {
-  status.value = { text, kind }
-}
 
 // 视频信息（与各播放页统一口径）：mpegts.js 仅走 MSE→<video>，解码模式固定为硬解
 const videoRows = computed(() => {
@@ -41,20 +35,6 @@ const videoRows = computed(() => {
 
 function onMediaInfo(mi) {
   mediaInfo.value = { ...mi }
-  const isHevc = /hev|hvc/i.test(mi.videoCodec || '')
-  const mseHevcOk = capRows.value.some((row) => row.label === 'MSE H.265' && row.value === '支持')
-  if (isHevc && !mseHevcOk) {
-    setStatus('视频为 H.265，但当前浏览器 MSE 不支持 HEVC 硬解。可换 Chrome/Edge、改推 H.264，或看「FLV 对照」页（h265web.js 软解）。', 'is-error')
-  }
-}
-
-function onStatistics(next) {
-  stats.value = { ...next }
-}
-
-function onError(errorType, errorDetail, errorInfo) {
-  const detail = errorInfo?.info ? ` / ${errorInfo.info}` : ''
-  setStatus(`播放失败：${errorType} / ${errorDetail}${detail}。若为 H.265/HEVC，可换 Chrome/Edge、改推 H.264，或看「FLV 对照」页（h265web.js 软解）。`, 'is-error')
 }
 
 function destroyPlayer() {
@@ -70,29 +50,21 @@ function destroyPlayer() {
 function play() {
   const target = url.value.trim()
   if (!isAllowedStreamUrl(target)) {
-    setStatus('播放地址无效：仅支持 http(s)/ws(s) 协议。', 'is-error')
     return
   }
   if (!mpegts.isSupported()) {
-    setStatus('当前浏览器不支持 MSE，无法播放 FLV。', 'is-error')
     return
   }
   destroyPlayer()
   const instance = mpegts.createPlayer({ type: 'flv', isLive: isLive.value, url: target }, { enableWorker: true })
   instance.attachMediaElement(videoEl.value)
   instance.on(mpegts.Events.MEDIA_INFO, onMediaInfo)
-  instance.on(mpegts.Events.STATISTICS_INFO, onStatistics)
-  instance.on(mpegts.Events.ERROR, onError)
   player = instance
   hasPlayer.value = true
   instance.load()
-  instance.play().catch((err) => {
-    setStatus(`自动播放被浏览器拦截，请点击播放按钮：${err?.message ?? err}`, 'is-error')
-  })
+  instance.play().catch(() => {}) // 自动播放被浏览器拦截时静默，用户可点击播放按钮
   mediaInfo.value = null
-  stats.value = null
   isPaused.value = false
-  setStatus('播放中…', 'is-ok')
 }
 
 function togglePause() {
@@ -102,11 +74,9 @@ function togglePause() {
   if (isPaused.value) {
     player.play()
     isPaused.value = false
-    setStatus('播放中…', 'is-ok')
   } else {
     player.pause()
     isPaused.value = true
-    setStatus('已暂停', '')
   }
 }
 

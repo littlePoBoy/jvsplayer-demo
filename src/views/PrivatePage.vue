@@ -26,30 +26,11 @@ const isRecording = ref(false)
 const isDownloading = ref(false)
 const curTs = ref(null)
 const metaInfo = ref(null)
-const status = ref({ text: '初始化中…', kind: '' })
 const capRows = ref([])
 
 let webplayer = null
 let progressTimer = null
 let metaTimer = null
-
-function setStatus(text, kind = '') {
-  status.value = { text, kind }
-}
-
-function safeMsg(msg) {
-  if (msg === null || msg === undefined) {
-    return ''
-  }
-  if (typeof msg === 'string' || typeof msg === 'number') {
-    return String(msg)
-  }
-  try {
-    return JSON.stringify(msg)
-  } catch {
-    return String(msg)
-  }
-}
 
 function normalizeSeconds(value) {
   // 兼容毫秒/秒两种时间戳
@@ -157,12 +138,10 @@ function stopMetaPolling() {
 function wireEvents(instance) {
   instance.on('codec_loaded', () => {
     codecReady.value = true
-    setStatus('解码器已就绪（codec_loaded），可以播放 / 回放 / 对讲。', 'is-ok')
   })
   instance.on('media_play_success', () => {
     hasPlayer.value = true
     isPaused.value = false
-    setStatus('播放成功。', 'is-ok')
   })
   instance.on('media_play_stopped', () => {
     hasPlayer.value = false
@@ -171,76 +150,59 @@ function wireEvents(instance) {
     stopProgressPolling()
     stopMetaPolling()
     metaInfo.value = null
-    setStatus('播放已停止。', '')
   })
   instance.on('live_failed', (msg) => {
+    console.warn('live_failed:', msg)
     hasPlayer.value = false
-    setStatus(`直播失败：${safeMsg(msg)}`, 'is-error')
   })
   instance.on('vod_failed', (msg) => {
+    console.warn('vod_failed:', msg)
     hasPlayer.value = false
-    setStatus(`回放失败：${safeMsg(msg)}`, 'is-error')
   })
   instance.on('vod_pausing', () => {
     isPaused.value = true
-    setStatus('回放已暂停。', '')
   })
-  instance.on('vod_speed', (msg) => {
-    setStatus(`倍速切换成功：${safeMsg(msg)}`, 'is-ok')
-  })
+  instance.on('vod_speed', () => {}) // 仅回执展示；订阅保留待 UI 补回
   instance.on('vod_over', () => {
     isPaused.value = true
     stopProgressPolling()
-    setStatus('回放播放完毕。', '')
   })
   instance.on('vod_progress', (msg) => {
     handleProgressMsg(msg)
   })
   instance.on('talk_started', () => {
     isTalking.value = true
-    setStatus('对讲已打开。', 'is-ok')
   })
   instance.on('talk_failed', (msg) => {
+    console.warn('talk_failed:', msg)
     isTalking.value = false
-    setStatus(`对讲失败：${safeMsg(msg)}`, 'is-error')
   })
   instance.on('talk_stopped', () => {
     isTalking.value = false
-    setStatus('对讲已关闭。', '')
   })
   instance.on('download_failed', (msg) => {
+    console.warn('download_failed:', msg)
     isDownloading.value = false
-    setStatus(`下载失败：${safeMsg(msg)}`, 'is-error')
   })
-  instance.on('download_over', () => {
-    setStatus('下载完毕。', 'is-ok')
-  })
-  instance.on('download_progress', (msg) => {
-    setStatus(`下载中… ${safeMsg(msg)}`, '')
-  })
+  instance.on('download_over', () => {}) // 仅回执展示；订阅保留待 UI 补回
+  instance.on('download_progress', () => {}) // 仅回执展示；订阅保留待 UI 补回
   instance.on('download_stopped', () => {
     isDownloading.value = false
-    setStatus('下载已停止。', '')
   })
-  instance.on('recordered_one_file', (fileName) => {
-    setStatus(`录像文件已保存：${safeMsg(fileName)}`, 'is-ok')
-  })
+  instance.on('recordered_one_file', () => {}) // 仅回执展示；订阅保留待 UI 补回
 }
 
 // ---------- 业务操作 ----------
 
 async function onPlay() {
   if (!webplayer) {
-    setStatus('websdk 尚未初始化完成。', 'is-error')
     return
   }
   if (!codecReady.value) {
-    setStatus('解码器尚未加载完成（codec_loaded 未触发），直播 / 回放 / 对讲暂不可用。', 'is-error')
     return
   }
   const target = playUrl.value.trim()
   if (!isAllowedStreamUrl(target)) {
-    setStatus('播放地址无效：仅支持 ws(s)/http(s) 协议。', 'is-error')
     return
   }
   try {
@@ -255,9 +217,8 @@ async function onPlay() {
     if (mode.value === 'vod') {
       startProgressPolling()
     }
-    setStatus('播放中…', 'is-ok')
   } catch (err) {
-    setStatus(`播放失败：${err?.message ?? safeMsg(err)}`, 'is-error')
+    console.warn('播放失败：', err)
   }
 }
 
@@ -280,15 +241,13 @@ function onStop() {
   hasPlayer.value = false
   isPaused.value = false
   curTs.value = null
-  setStatus('已停止。', '')
 }
 
 async function onScreenshot() {
   try {
     await webplayer.ScreenShot({ type: 'download', format: 'png' })
-    setStatus('截图已保存（默认文件名：快照+时间戳）。', 'is-ok')
   } catch (err) {
-    setStatus(`截图失败：${err?.message ?? safeMsg(err)}`, 'is-error')
+    console.warn('截图失败：', err)
   }
 }
 
@@ -296,15 +255,13 @@ async function onToggleRecord() {
   if (isRecording.value) {
     webplayer.StopRecorde()
     isRecording.value = false
-    setStatus('录像已停止。', 'is-ok')
     return
   }
   try {
     await webplayer.StartRecorde()
     isRecording.value = true
-    setStatus('录像中…（每 100MB 保存一个 mp4，编解码参数变化也会切文件）', 'is-ok')
   } catch (err) {
-    setStatus(`录像启动失败：${err?.message ?? safeMsg(err)}`, 'is-error')
+    console.warn('录像启动失败：', err)
   }
 }
 
@@ -331,7 +288,8 @@ onMounted(async () => {
   try {
     await loadScript(`${BASE_URL}websdk/JWebPlayer.bundle.js`)
   } catch (err) {
-    setStatus(`websdk 加载失败：${err.message}。请确认 SDK 文件已部署到 public/websdk/。`, 'is-error')
+    // 加载失败通常是部署问题，保留提示文本便于排查
+    console.warn(`websdk 加载失败：${err.message}。请确认 SDK 文件已部署到 public/websdk/。`)
     return
   }
   webplayer = new window.JWebPlayer({
@@ -339,7 +297,6 @@ onMounted(async () => {
     prefixPath: `${BASE_URL}websdk/`,
   })
   wireEvents(webplayer)
-  setStatus('websdk 已加载，等待解码器（codec_loaded）…', '')
 })
 
 onUnmounted(() => {
@@ -408,10 +365,6 @@ onUnmounted(() => {
         {{ isRecording ? '停止录像' : '开始录像' }}
       </button>
     </template>
-
-    <!-- <template #status>
-      <span :class="status.kind">{{ status.text }}</span>
-    </template> -->
 
     <template #info>
       <InfoPanel title="视频信息" :rows="videoRows" />

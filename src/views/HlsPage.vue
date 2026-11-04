@@ -14,16 +14,11 @@ const volume = ref(1)
 const isMuted = ref(false)
 const hasPlayer = ref(false)
 const isPaused = ref(false)
-const status = ref({ text: '未播放', kind: '' })
 const levelInfo = ref(null)
 const decodePath = ref('') // 'mse' | 'native' | ''（未播放）
 const capRows = ref([])
 
 let hls = null
-
-function setStatus(text, kind = '') {
-  status.value = { text, kind }
-}
 
 // 视频信息（与各播放页统一口径）。音频采样率 hls.js 未暴露，显示 '-'。
 const DECODE_PATH_LABELS = {
@@ -44,37 +39,13 @@ const videoRows = computed(() => {
 })
 
 function onManifestParsed(_event, data) {
-  const levels = data.levels ?? []
-  const first = levels[0] ?? {}
+  const first = (data.levels ?? [])[0] ?? {}
   levelInfo.value = {
     width: first.width ?? 0,
     height: first.height ?? 0,
     videoCodec: first.videoCodec ?? null,
     audioCodec: first.audioCodec ?? null,
     frameRate: first.frameRate ?? 0,
-    bitrate: first.bitrate ?? 0,
-    levelCount: levels.length,
-    currentLevel: 0,
-  }
-}
-
-function onLevelSwitched(_event, data) {
-  if (levelInfo.value) {
-    levelInfo.value = { ...levelInfo.value, currentLevel: data.level }
-  }
-}
-
-function onError(_event, data) {
-  if (!data.fatal) {
-    return
-  }
-  const hint = '若为 H.265/HEVC，可换 Chrome/Edge、改推 H.264，或看「HLS 对照」页（h265web.js 软解）。'
-  if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-    setStatus(`网络错误：${data.details}。请检查地址与跨域（CORS）配置。${hint}`, 'is-error')
-  } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-    setStatus(`媒体/解码错误：${data.details}。${hint}`, 'is-error')
-  } else {
-    setStatus(`播放失败：${data.details}。${hint}`, 'is-error')
   }
 }
 
@@ -94,7 +65,6 @@ function destroyPlayer() {
 function play() {
   const target = url.value.trim()
   if (!isAllowedStreamUrl(target)) {
-    setStatus('播放地址无效：仅支持 http(s)/ws(s) 协议。', 'is-error')
     return
   }
   destroyPlayer()
@@ -105,8 +75,6 @@ function play() {
     decodePath.value = 'mse'
     const instance = new Hls({ enableWorker: true })
     instance.on(Hls.Events.MANIFEST_PARSED, onManifestParsed)
-    instance.on(Hls.Events.LEVEL_SWITCHED, onLevelSwitched)
-    instance.on(Hls.Events.ERROR, onError)
     instance.loadSource(target)
     instance.attachMedia(video)
     hls = instance
@@ -114,19 +82,14 @@ function play() {
     decodePath.value = 'native'
     video.src = target
     video.addEventListener('loadedmetadata', () => video.play().catch(() => {}), { once: true })
-    setStatus('使用浏览器原生 HLS 播放（如 Safari）', 'is-ok')
     hasPlayer.value = true
     return
   } else {
-    setStatus('当前浏览器不支持 HLS（无 MSE 且无原生支持）。', 'is-error')
     return
   }
   hasPlayer.value = true
-  video.play().catch((err) => {
-    setStatus(`自动播放被浏览器拦截，请点击播放按钮：${err?.message ?? err}`, 'is-error')
-  })
+  video.play().catch(() => {}) // 自动播放被浏览器拦截时静默，用户可点击播放按钮
   isPaused.value = false
-  setStatus('播放中…', 'is-ok')
 }
 
 function togglePause() {
@@ -137,11 +100,9 @@ function togglePause() {
   if (isPaused.value) {
     video.play()
     isPaused.value = false
-    setStatus('播放中…', 'is-ok')
   } else {
     video.pause()
     isPaused.value = true
-    setStatus('已暂停', '')
   }
 }
 
