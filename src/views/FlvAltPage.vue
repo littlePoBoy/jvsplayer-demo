@@ -13,7 +13,7 @@ const H265WEB_BASE = `${import.meta.env.BASE_URL}h265web/`
 const PLAYER_ID = 'flv-alt-stage'
 
 const stageEl = useTemplateRef('stageEl')
-const url = ref('')
+const url = ref('https://mister-ben.github.io/videojs-flvjs/bbb.flv')
 const volume = ref(1)
 const isMuted = ref(false)
 const core = ref('')
