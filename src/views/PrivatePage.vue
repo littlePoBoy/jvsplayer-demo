@@ -16,14 +16,14 @@ const META_POLL_INTERVAL_MS = 1000
 // DECODE_TYPE（wasm_decoder.bundle.js 常量核对）：0=默认(自动)、1=wasm、2=webcodec、3=video标签
 const DECODE_TYPE_OPTIONS = [
   { value: 0, label: '默认（自动）' },
-  { value: 1, label: 'wasm（软解）' },
-  { value: 2, label: 'webcodec（硬解）' },
   { value: 3, label: 'video标签（MSE）' },
+  { value: 2, label: 'webcodec（硬解）' },
+  { value: 1, label: 'wasm（软解）' },
 ]
 const FORCED_DECODE_NAMES = { 1: '指定: WASM（软解）', 2: '指定: WebCodec（硬解）', 3: '指定: video标签（MSE）' }
 
 const containerEl = useTemplateRef('containerEl')
-const playUrl = ref('')
+const playUrl = ref('wss://mediadev02.cloudsee.com:20380/live/12221S8GAR8Y?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfbW9kZSI6IlB1YmxpY0Nsb3VkIiwiY2hhbm5lbF9pZCI6MCwiZGV2aWNlX2lkIjoiMTIyMjFTOEdBUjhZIiwiZXhwaXJlX3RpbWUiOjE4MDM4NTkyMDAsImlubmVyX2FkZHIiOiIxOTIuMTY4LjExNy42OjcwNzAiLCJtYXhfcGxheV9kdXJhdGlvbiI6MCwic3RyZWFtX3R5cGUiOjAsInRlbmFudF9pZCI6IiIsInVzZXJfaWQiOiI1NGFiYjE1OTNlYzM0YmVkODFkOGIwMWRkNTc4MTY0ZSJ9.FXnunl2VLMFlcw4eK_kA1lmz7UxKBsvYpC8SpoOw4Yo')
 const decodeType = ref(0)
 const volume = ref(1)
 const isMuted = ref(false)
