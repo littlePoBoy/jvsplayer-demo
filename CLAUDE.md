@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 面向公司平台开发者的 Web 播放参考 Demo（Vite + Vue3）：演示 ① 如何对接公司闭源 websdk（JVMP 私协：直播 / 回放 / 对讲），② 如何用开源方案播放 HTTP-FLV / WS-FLV / HLS。权威设计文档是 `web-player-tech-scheme.md`，实现前先读；本文件只摘不可从代码推导的决策与坑。
 
-当前仓库尚未脚手架化（无 package.json / 源码），只有方案文档与 websdk 参考材料，页面由研发按方案落地,使用git来管理代码。
+仓库已脚手架化（Vite + Vue3），页面源码在 src/，用 git 管理代码。
 
 ## 核心架构原则（勿违背）
 
@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 路由/页 | 依赖 | 用途 | 范围 |
 |---------|------|------|------|
-| 私协页 | 公司 websdk | JVMP 直播 / 回放 / 截图 / 录像 | 要实现 |
+| 私协页 | 公司 websdk | JVMP 直播 / 回放 / 截图 / 录像 / 下载 / 倍速 | 要实现 |
 | FLV 主路径 | mpegts.js | HTTP-FLV / WS-FLV | 要实现 |
 | HLS 主路径 | hls.js | HLS 直播 / 点播 | 要实现 |
 | FLV 对照 | h265web.js | 同协议对照实现（用户自选） | 要实现 |
@@ -57,7 +57,7 @@ SDK 文件在 `websdk/websdk/`（闭源 bundle，勿修改）：`JWebPlayer.bund
 
 ## 常用命令
 
-仓库目前无 package.json。脚手架（Vite + Vue3）落定后按 Vite 惯例：`npm install`、`npm run dev`、`npm run build`、`npm run preview`——以生成的 package.json scripts 为准。官方 websdk demo（不在本仓库）的参考命令为 `npm run serve` → localhost:8088。
+官方 websdk demo（不在本仓库）的参考命令为 `npm run serve` → localhost:8088。
 
 ## 参考文档索引
 
