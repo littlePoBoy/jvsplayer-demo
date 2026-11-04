@@ -3,11 +3,13 @@
  * 返回 [{ label, value }] 行数组，供 InfoPanel 展示。
  */
 
-const HEVC_MP4_CANDIDATES = [
-  'video/mp4; codecs="hvc1.1.6.L93.B0"',
-  'video/mp4; codecs="hev1.1.6.L93.B0"',
-  'video/mp4; codecs="hvc1.2.4.L120.B0"',
+const HEVC_CODEC_CANDIDATES = [
+  'hvc1.1.6.L93.B0',
+  'hev1.1.6.L93.B0',
+  'hvc1.2.4.L120.B0',
 ]
+
+const HEVC_MP4_CANDIDATES = HEVC_CODEC_CANDIDATES.map((codec) => `video/mp4; codecs="${codec}"`)
 
 function detectBrowser() {
   const ua = navigator.userAgent
@@ -57,10 +59,11 @@ export async function probeCapabilities() {
   const mse = isMseSupported()
   const mseHevc = HEVC_MP4_CANDIDATES.some(isMseTypeSupported)
   const webCodecs = typeof window.VideoDecoder !== 'undefined'
-  const [wcH264, wcHevc] = await Promise.all([
+  const [wcH264, wcHevcHits] = await Promise.all([
     isWebCodecsConfigSupported('avc1.64001f'),
-    isWebCodecsConfigSupported(HEVC_MP4_CANDIDATES[0]),
+    Promise.all(HEVC_CODEC_CANDIDATES.map(isWebCodecsConfigSupported)),
   ])
+  const wcHevc = wcHevcHits.some(Boolean)
   const nativeHls = document.createElement('video').canPlayType('application/vnd.apple.mpegurl')
   const toSupport = (ok) => (ok ? '支持' : '不支持')
 
