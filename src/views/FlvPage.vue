@@ -9,7 +9,7 @@ import { formatVideoCodecName, formatAudioCodecName } from '../utils/format.js'
 
 // FLV 主路径（方案 A）：mpegts.js 解封装 → MSE → <video>。硬解优先，不做软解兜底。
 const videoEl = useTemplateRef('videoEl')
-const url = ref('')
+const url = ref('https://mister-ben.github.io/videojs-flvjs/bbb.flv')
 const isLive = ref(true)
 const volume = ref(1)
 const isMuted = ref(false)
