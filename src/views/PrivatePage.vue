@@ -13,9 +13,18 @@ const BASE_URL = import.meta.env.BASE_URL
 const POLL_INTERVAL_MS = 500
 const META_POLL_INTERVAL_MS = 1000
 
+// DECODE_TYPE（wasm_decoder.bundle.js 常量核对）：0=默认(自动)、1=wasm、2=webcodec、3=video标签
+const DECODE_TYPE_OPTIONS = [
+  { value: 0, label: '默认（自动）' },
+  { value: 1, label: 'wasm（软解）' },
+  { value: 2, label: 'webcodec（硬解）' },
+  { value: 3, label: 'video标签（MSE）' },
+]
+const FORCED_DECODE_NAMES = { 1: '指定: WASM（软解）', 2: '指定: WebCodec（硬解）', 3: '指定: video标签（MSE）' }
+
 const containerEl = useTemplateRef('containerEl')
 const playUrl = ref('')
-const mode = ref('live') // 仅控制界面展示形态；SDK 以 URL 自行区分直播/回放
+const decodeType = ref(0)
 const volume = ref(1)
 const isMuted = ref(false)
 const codecReady = ref(false)
@@ -29,6 +38,7 @@ const metaInfo = ref(null)
 const capRows = ref([])
 
 let webplayer = null
+let playerOptions = null // 构造 options；Play() 时从其读取 decodeType
 let progressTimer = null
 let metaTimer = null
 
@@ -64,8 +74,11 @@ const VIDEO_CODEC_NAMES = { 1: 'H264', 2: 'H265' }
 const AUDIO_CODEC_NAMES = { 1: 'G711A', 2: 'G711U', 4: 'AAC' }
 
 // websdk 解码器自动链（wasm_decoder.bundle.js）：MSE(video标签) → WebCodec → WASM 软解；
-// 本页未指定 decodeType（=自动），实际解码器按右侧能力探测同序推断。
+// decodeType 默认(0)走自动链，实际解码器按右侧能力探测同序推断；指定后展示所选模式。
 const decodeMode = computed(() => {
+  if (decodeType.value !== 0) {
+    return FORCED_DECODE_NAMES[decodeType.value]
+  }
   const codecName = metaInfo.value ? VIDEO_CODEC_NAMES[metaInfo.value.v?.codecType] : null
   if (!codecName) {
     return '自动'
@@ -208,15 +221,15 @@ async function onPlay() {
   try {
     // 文档要求：每次播放前重设音量，避免页面残留值与默认值不一致（静音时按 0 生效）
     webplayer.SetVolume(isMuted.value ? 0 : Number(volume.value))
+    // Play() 时从构造 options 读取 decodeType（m_options 即传入对象引用，bundle 核对），播放前同步下拉值
+    playerOptions.decodeType = decodeType.value
     await webplayer.Play({ url: target })
     hasPlayer.value = true
     isPaused.value = false
     curTs.value = null
     metaInfo.value = null
     startMetaPolling()
-    if (mode.value === 'vod') {
-      startProgressPolling()
-    }
+    startProgressPolling()
   } catch (err) {
     console.warn('播放失败：', err)
   }
@@ -292,10 +305,12 @@ onMounted(async () => {
     console.warn(`websdk 加载失败：${err.message}。请确认 SDK 文件已部署到 public/websdk/。`)
     return
   }
-  webplayer = new window.JWebPlayer({
+  playerOptions = {
     container: containerEl.value,
     prefixPath: `${BASE_URL}websdk/`,
-  })
+    decodeType: decodeType.value,
+  }
+  webplayer = new window.JWebPlayer(playerOptions)
   wireEvents(webplayer)
 })
 
@@ -329,10 +344,9 @@ onUnmounted(() => {
         @keyup.enter="onPlay"
       />
       <label class="checkbox-label">
-        业务形态
-        <select v-model="mode" class="select">
-          <option value="live">直播</option>
-          <option value="vod">回放</option>
+        解码模式
+        <select v-model="decodeType" class="select">
+          <option v-for="opt in DECODE_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
       </label>
       <button class="btn btn-primary" type="button" :disabled="!codecReady" @click="onPlay">播放</button>
