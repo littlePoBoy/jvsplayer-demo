@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## websdk 集成要点
 
-SDK 文件在 `websdk/websdk/`（闭源 bundle，勿修改）：`JWebPlayer.bundle.js` 为主入口（暴露全局 `JWebPlayer`），`decoder.js` / `decoder.wasm`、`wasm_decoder.bundle.js`、`stream_client.bundle.js`、`audio_proccessor.bundle.js`、`audio_render_proccessor.bundle.js` 为运行时按需加载的解码/收流/音频组件。
+SDK 文件在 `websdk/websdk/`（闭源 bundle，勿修改）
 
 - 全部 SDK 文件须部署在 WEB 根目录（与 index.html 同级），或构造/Play 时传 `prefixPath`；Vite 项目放 `public/`。
 - 构造 options：`container` 必填且**必须是 div**（不能是 video/canvas 标签）；`prefixPath` 必填；`decodeType`（默认/wasm/webcodec/video 标签）通常不用指定。
@@ -41,6 +41,7 @@ SDK 文件在 `websdk/websdk/`（闭源 bundle，勿修改）：`JWebPlayer.bund
 - 事件经 `webplayer.on('事件名')` 订阅（事件常量名拼写即为 `JV_WEBPLALYER_EVENT`），完整 API 与事件表见 `websdk/demo的使用说明.md`，勿凭记忆写接口。
 - 回放时间轴组件 JTimeLine **不属于 websdk**：官方 demo 源码（含 JtimeLine.js）不在本仓库，进度条需自行实现或另行向厂商索取；`GetCurTimestamp()` 可用于驱动进度。
 - 兼容基线（厂商口径）：Chrome 85+、Firefox 82.0.3+；支持 H.264/H.265、G.711/AAC。
+- 不需要读取websdk的源码，使用请参考 @websdk/demo的使用说明.md 即可。
 
 ## H.265 / 兼容策略（Demo 统一口径）
 

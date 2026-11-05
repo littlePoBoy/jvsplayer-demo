@@ -5,6 +5,7 @@ import InfoPanel from '../components/InfoPanel.vue'
 import { loadScript } from '../utils/scriptLoader.js'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
+import { formatDateTime } from '../utils/format.js'
 
 // 私协页：公司 websdk（JVMP 私协）直播 / 回放 / 截图 / 录像。
 // 厂商要求：单 WebPlayer 实例承担全部业务；与开源方案页面级隔离。
@@ -22,8 +23,25 @@ const DECODE_TYPE_OPTIONS = [
 ]
 const FORCED_DECODE_NAMES = { 1: '指定: WASM（软解）', 2: '指定: WebCodec（硬解）', 3: '指定: video标签（MSE）' }
 
+// 直播/回放选择：决定悬浮条形态（回放走暂停/倍速/跳播/录像/下载），SDK 仍按 URL 自动区分直播/回放
+const MODE_OPTIONS = [
+  { value: 'live', label: '直播' },
+  { value: 'vod', label: '回放' },
+]
+// 回放倍速（SetSpeed 取值，demo的使用说明.md 2.2.9）
+const SPEED_OPTIONS = [
+  { value: 1, label: '1' },
+  { value: 2, label: '2' },
+  { value: 4, label: '4' },
+  { value: 8, label: '8' },
+  { value: 0.5, label: '1/2' },
+  { value: 0.25, label: '1/4' },
+  { value: 0.125, label: '1/8' },
+]
+
 const containerEl = useTemplateRef('containerEl')
 const playUrl = ref('wss://mediadev02.cloudsee.com:20380/live/12221S8GAR8Y?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfbW9kZSI6IlB1YmxpY0Nsb3VkIiwiY2hhbm5lbF9pZCI6MCwiZGV2aWNlX2lkIjoiMTIyMjFTOEdBUjhZIiwiZXhwaXJlX3RpbWUiOjE4MDM4NTkyMDAsImlubmVyX2FkZHIiOiIxOTIuMTY4LjExNy42OjcwNzAiLCJtYXhfcGxheV9kdXJhdGlvbiI6MCwic3RyZWFtX3R5cGUiOjAsInRlbmFudF9pZCI6IiIsInVzZXJfaWQiOiI1NGFiYjE1OTNlYzM0YmVkODFkOGIwMWRkNTc4MTY0ZSJ9.FXnunl2VLMFlcw4eK_kA1lmz7UxKBsvYpC8SpoOw4Yo')
+const streamMode = ref('live')
 const decodeType = ref(0)
 const volume = ref(1)
 const isMuted = ref(false)
@@ -36,6 +54,11 @@ const talkDialogVisible = ref(false)
 const isRecording = ref(false)
 const isDownloading = ref(false)
 const curTs = ref(null)
+const playSpeed = ref(1)
+const seekDialogVisible = ref(false)
+const seekTimeStr = ref('') // 跳播弹窗 datetime-local 值
+const downloadUrl = ref('')
+const downloadDialogVisible = ref(false)
 const metaInfo = ref(null)
 const capRows = ref([])
 
@@ -95,6 +118,8 @@ const decodeMode = computed(() => {
   }
   return '自动: WASM（软解）'
 })
+
+const isVod = computed(() => streamMode.value === 'vod')
 
 const videoRows = computed(() => {
   const v = metaInfo.value?.v
@@ -182,7 +207,12 @@ function wireEvents(instance) {
   instance.on('vod_pausing', () => {
     isPaused.value = true
   })
-  instance.on('vod_speed', () => {}) // 仅回执展示；订阅保留待 UI 补回
+  instance.on('vod_speed', (msg) => {
+    // SetSpeed/Resume 成功回执（bundle 内 emit GetSpeed() 数值），同步倍速下拉
+    if (typeof msg === 'number') {
+      playSpeed.value = msg
+    }
+  })
   instance.on('vod_over', () => {
     isPaused.value = true
     stopProgressPolling()
@@ -204,7 +234,9 @@ function wireEvents(instance) {
     console.warn('download_failed:', msg)
     isDownloading.value = false
   })
-  instance.on('download_over', () => {}) // 仅回执展示；订阅保留待 UI 补回
+  instance.on('download_over', () => {
+    isDownloading.value = false
+  })
   instance.on('download_progress', () => {}) // 仅回执展示；订阅保留待 UI 补回
   instance.on('download_stopped', () => {
     isDownloading.value = false
@@ -233,6 +265,7 @@ async function onPlay() {
     await webplayer.Play({ url: target })
     hasPlayer.value = true
     isPaused.value = false
+    playSpeed.value = 1
     curTs.value = null
     metaInfo.value = null
     startMetaPolling()
@@ -260,7 +293,97 @@ function onStop() {
   metaInfo.value = null
   hasPlayer.value = false
   isPaused.value = false
+  playSpeed.value = 1
   curTs.value = null
+}
+
+// ---------- 回放控制（demo的使用说明.md 2.2：Pause/Resume/SetSpeed/SetStartTime/StartDownload） ----------
+
+function onModeChange() {
+  // 直播/回放切换后当前播放上下文失效，先停止
+  if (hasPlayer.value || isDownloading.value) {
+    onStop()
+  }
+}
+
+function onTogglePause() {
+  if (!webplayer) {
+    return
+  }
+  if (!hasPlayer.value) {
+    onPlay()
+    return
+  }
+  if (isPaused.value) {
+    isPaused.value = false
+    webplayer.Resume().catch((err) => {
+      console.warn('Resume:', err)
+      isPaused.value = true
+    })
+  } else {
+    isPaused.value = true
+    webplayer.Pause().catch((err) => {
+      console.warn('Pause:', err)
+      isPaused.value = false
+    })
+  }
+}
+
+function onSpeedChange() {
+  if (!webplayer) {
+    return
+  }
+  webplayer.SetSpeed(Number(playSpeed.value)).catch((err) => console.warn('SetSpeed:', err))
+}
+
+function toDatetimeLocalValue(unixSeconds) {
+  const d = new Date(unixSeconds * 1000)
+  const pad = (n) => String(n).padStart(2, '0')
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  )
+}
+
+function onSeekClick() {
+  // 预填当前进度（GetCurTimestamp 为 unix 秒，见 demo的使用说明.md 2.2.12）
+  seekTimeStr.value = curTs.value > 1e9 ? toDatetimeLocalValue(curTs.value) : ''
+  seekDialogVisible.value = true
+}
+
+function onSeekConfirm() {
+  const ms = new Date(seekTimeStr.value).getTime()
+  if (!webplayer || !Number.isFinite(ms)) {
+    return
+  }
+  seekDialogVisible.value = false
+  // SetStartTime 取 unix 秒（demo的使用说明.md 2.2.6；是否再偏移时区由设备/平台侧决定）
+  webplayer.SetStartTime(Math.floor(ms / 1000)).catch((err) => console.warn('SetStartTime:', err))
+}
+
+function onToggleDownload() {
+  if (isDownloading.value) {
+    webplayer.StopDownload().catch((err) => console.warn('StopDownload:', err))
+    return
+  }
+  if (!downloadUrl.value) {
+    downloadUrl.value = playUrl.value
+  }
+  downloadDialogVisible.value = true
+}
+
+async function onDownloadConfirm() {
+  const target = downloadUrl.value.trim()
+  if (!webplayer || !isAllowedStreamUrl(target)) {
+    return
+  }
+  downloadDialogVisible.value = false
+  try {
+    await webplayer.StartDownload({ url: target })
+    isDownloading.value = true
+  } catch (err) {
+    console.warn('下载启动失败：', err)
+  }
 }
 
 async function onScreenshot() {
@@ -367,6 +490,9 @@ onUnmounted(() => {
 <template>
   <PlayerShell>
     <template #top>
+      <select v-model="streamMode" class="select" @change="onModeChange">
+        <option v-for="opt in MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+      </select>
       <input
         v-model="playUrl"
         class="input url-input"
@@ -390,34 +516,73 @@ onUnmounted(() => {
     </template>
 
     <template #overlay>
-      <button class="btn" type="button" :disabled="!hasPlayer && !codecReady" @click="hasPlayer ? onStop() : onPlay()">
-        {{ hasPlayer ? '停止' : '播放' }}
-      </button>
-      <button class="btn" type="button" @click="toggleMute">
-        {{ isMuted ? '取消静音' : '静音' }}
-      </button>
-      <span class="field-label">音量</span>
-      <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
-      <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
-      <button class="btn" type="button" :disabled="!hasPlayer" @click="onScreenshot">截图</button>
-      <button
-        class="btn"
-        type="button"
-        :class="{ 'btn-danger': isRecording }"
-        :disabled="!hasPlayer"
-        @click="onToggleRecord"
-      >
-        {{ isRecording ? '停止录像' : '开始录像' }}
-      </button>
-      <button
-        class="btn"
-        type="button"
-        :class="{ 'btn-danger': isTalking }"
-        :disabled="!hasPlayer"
-        @click="onTalkClick"
-      >
-        {{ isTalking ? '停止对讲' : '开始对讲' }}
-      </button>
+      <!-- 回放模式：暂停/播放、倍速、跳播、录像、下载（对讲为直播专属，不渲染） -->
+      <template v-if="isVod">
+        <button class="btn" type="button" :disabled="!hasPlayer && !codecReady" @click="onTogglePause">
+          {{ !hasPlayer ? '播放' : isPaused ? '播放' : '暂停' }}
+        </button>
+        <span class="field-label">倍速</span>
+        <select v-model.number="playSpeed" class="select" :disabled="!hasPlayer" @change="onSpeedChange">
+          <option v-for="opt in SPEED_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+        <span class="field-label">{{ formatDateTime(curTs) }}</span>
+        <button class="btn" type="button" :disabled="!hasPlayer" @click="onSeekClick">跳播</button>
+        <button
+          class="btn"
+          type="button"
+          :class="{ 'btn-danger': isRecording }"
+          :disabled="!hasPlayer"
+          @click="onToggleRecord"
+        >
+          {{ isRecording ? '停止录像' : '开始录像' }}
+        </button>
+        <button
+          class="btn"
+          type="button"
+          :class="{ 'btn-danger': isDownloading }"
+          :disabled="!hasPlayer"
+          @click="onToggleDownload"
+        >
+          {{ isDownloading ? '停止下载' : '下载' }}
+        </button>
+        <button class="btn" type="button" @click="toggleMute">
+          {{ isMuted ? '取消静音' : '静音' }}
+        </button>
+        <span class="field-label">音量</span>
+        <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
+        <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
+        <button class="btn" type="button" :disabled="!hasPlayer" @click="onScreenshot">截图</button>
+      </template>
+      <template v-else>
+        <button class="btn" type="button" :disabled="!hasPlayer && !codecReady" @click="hasPlayer ? onStop() : onPlay()">
+          {{ hasPlayer ? '停止' : '播放' }}
+        </button>
+        <button class="btn" type="button" @click="toggleMute">
+          {{ isMuted ? '取消静音' : '静音' }}
+        </button>
+        <span class="field-label">音量</span>
+        <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
+        <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
+        <button class="btn" type="button" :disabled="!hasPlayer" @click="onScreenshot">截图</button>
+        <button
+          class="btn"
+          type="button"
+          :class="{ 'btn-danger': isRecording }"
+          :disabled="!hasPlayer"
+          @click="onToggleRecord"
+        >
+          {{ isRecording ? '停止录像' : '开始录像' }}
+        </button>
+        <button
+          class="btn"
+          type="button"
+          :class="{ 'btn-danger': isTalking }"
+          :disabled="!hasPlayer"
+          @click="onTalkClick"
+        >
+          {{ isTalking ? '停止对讲' : '开始对讲' }}
+        </button>
+      </template>
     </template>
 
     <template #info>
@@ -427,26 +592,62 @@ onUnmounted(() => {
   </PlayerShell>
 
   <!-- 对讲地址弹窗：点击悬浮条「开始对讲」弹出，确定后 StartTalk -->
-  <div v-if="talkDialogVisible" class="talk-dialog-mask" @click.self="talkDialogVisible = false">
-    <div class="talk-dialog">
-      <div class="talk-dialog-title">开始对讲</div>
+  <div v-if="talkDialogVisible" class="dialog-mask" @click.self="talkDialogVisible = false">
+    <div class="dialog">
+      <div class="dialog-title">开始对讲</div>
       <input
         v-model="talkUrl"
-        class="input talk-dialog-input"
+        class="input dialog-input"
         type="text"
         placeholder="对讲地址（ws://…）"
         @keyup.enter="onTalkConfirm"
       />
-      <div class="talk-dialog-actions">
+      <div class="dialog-actions">
         <button class="btn" type="button" @click="talkDialogVisible = false">取消</button>
         <button class="btn btn-primary" type="button" :disabled="!talkUrl.trim()" @click="onTalkConfirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 跳播弹窗（回放）：输入目标时刻，确定后 SetStartTime(unix 秒) -->
+  <div v-if="seekDialogVisible" class="dialog-mask" @click.self="seekDialogVisible = false">
+    <div class="dialog">
+      <div class="dialog-title">跳播</div>
+      <input
+        v-model="seekTimeStr"
+        class="input dialog-input"
+        type="datetime-local"
+        step="1"
+        @keyup.enter="onSeekConfirm"
+      />
+      <div class="dialog-actions">
+        <button class="btn" type="button" @click="seekDialogVisible = false">取消</button>
+        <button class="btn btn-primary" type="button" :disabled="!seekTimeStr" @click="onSeekConfirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 下载地址弹窗（回放）：确定后 StartDownload -->
+  <div v-if="downloadDialogVisible" class="dialog-mask" @click.self="downloadDialogVisible = false">
+    <div class="dialog">
+      <div class="dialog-title">下载录像</div>
+      <input
+        v-model="downloadUrl"
+        class="input dialog-input"
+        type="text"
+        placeholder="下载地址（ws://…）"
+        @keyup.enter="onDownloadConfirm"
+      />
+      <div class="dialog-actions">
+        <button class="btn" type="button" @click="downloadDialogVisible = false">取消</button>
+        <button class="btn btn-primary" type="button" :disabled="!downloadUrl.trim()" @click="onDownloadConfirm">确定</button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.talk-dialog-mask {
+.dialog-mask {
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -456,7 +657,7 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.45);
 }
 
-.talk-dialog {
+.dialog {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -466,16 +667,16 @@ onUnmounted(() => {
   background: var(--color-panel);
 }
 
-.talk-dialog-title {
+.dialog-title {
   font-size: 15px;
   font-weight: 600;
 }
 
-.talk-dialog-input {
+.dialog-input {
   width: 100%;
 }
 
-.talk-dialog-actions {
+.dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
