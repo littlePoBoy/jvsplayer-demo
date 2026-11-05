@@ -117,6 +117,11 @@ function startProgressPolling() {
     if (!webplayer) {
       return
     }
+    // GetCurTimestamp 仅回放 player 有实现（bundle 内 vod player 定义，直播 player 无此方法，
+    // 见 demo的使用说明.md 2.2.12 回放章节），直播模式跳过轮询，避免抛 GetCurTimestamp is not a function
+    if (typeof webplayer.m_player?.GetCurTimestamp !== 'function') {
+      return
+    }
     const ts = Number(webplayer.GetCurTimestamp())
     if (Number.isFinite(ts) && ts > 0) {
       curTs.value = normalizeSeconds(ts)
