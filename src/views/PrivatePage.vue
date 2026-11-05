@@ -31,6 +31,8 @@ const codecReady = ref(false)
 const hasPlayer = ref(false)
 const isPaused = ref(false)
 const isTalking = ref(false)
+const talkUrl = ref('wss://mediadev02.cloudsee.com:20380/talk/12221S8GAR8Y?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfbW9kZSI6IlB1YmxpY0Nsb3VkIiwiY2hhbm5lbF9pZCI6MCwiZGV2aWNlX2lkIjoiMTIyMjFTOEdBUjhZIiwiZXhwaXJlX3RpbWUiOjE4MDM4NTkyMDAsImlubmVyX2FkZHIiOiIxOTIuMTY4LjExNy42OjcwNzAiLCJsaW5rX2tleSI6IjE3OTM4NDY0Mjc1MTE2OTYxNzIxOCIsIm1heF9wbGF5X2R1cmF0aW9uIjowLCJ0ZW5hbnRfaWQiOiIiLCJ1c2VyX2lkIjoiMDE0ZThmODg0OGVjNGNjNDk1NWJkYjc5ZTQ0MjA2NWYifQ.QABXQxcwq-eXpgxNL1tmA3GeAJjsavQuiybVfRiMSJA') // 与播放地址同款预填测试对讲流，弹窗内可改
+const talkDialogVisible = ref(false)
 const isRecording = ref(false)
 const isDownloading = ref(false)
 const curTs = ref(null)
@@ -278,6 +280,30 @@ async function onToggleRecord() {
   }
 }
 
+function onTalkClick() {
+  if (isTalking.value) {
+    webplayer.StopTalk() // talk_stopped 事件里复位 isTalking
+    return
+  }
+  talkDialogVisible.value = true
+}
+
+async function onTalkConfirm() {
+  const target = talkUrl.value.trim()
+  if (!webplayer || !isAllowedStreamUrl(target)) {
+    return
+  }
+  talkDialogVisible.value = false
+  try {
+    // 文档要求：每次对讲前重设扬声器/麦克风音量，避免页面残留值与默认值不一致（麦克风默认 0.8）
+    webplayer.SetVolume(isMuted.value ? 0 : Number(volume.value))
+    webplayer.SetMicVolume(0.8)
+    await webplayer.StartTalk({ url: target })
+  } catch (err) {
+    console.warn('对讲启动失败：', err)
+  }
+}
+
 function applyVolume() {
   // 拖动音量滑杆自动取消静音
   isMuted.value = false
@@ -378,6 +404,15 @@ onUnmounted(() => {
       >
         {{ isRecording ? '停止录像' : '开始录像' }}
       </button>
+      <button
+        class="btn"
+        type="button"
+        :class="{ 'btn-danger': isTalking }"
+        :disabled="!hasPlayer"
+        @click="onTalkClick"
+      >
+        {{ isTalking ? '停止对讲' : '开始对讲' }}
+      </button>
     </template>
 
     <template #info>
@@ -385,4 +420,59 @@ onUnmounted(() => {
       <InfoPanel title="浏览器 / 解码能力" :rows="capRows" />
     </template>
   </PlayerShell>
+
+  <!-- 对讲地址弹窗：点击悬浮条「开始对讲」弹出，确定后 StartTalk -->
+  <div v-if="talkDialogVisible" class="talk-dialog-mask" @click.self="talkDialogVisible = false">
+    <div class="talk-dialog">
+      <div class="talk-dialog-title">开始对讲</div>
+      <input
+        v-model="talkUrl"
+        class="input talk-dialog-input"
+        type="text"
+        placeholder="对讲地址（ws://…）"
+        @keyup.enter="onTalkConfirm"
+      />
+      <div class="talk-dialog-actions">
+        <button class="btn" type="button" @click="talkDialogVisible = false">取消</button>
+        <button class="btn btn-primary" type="button" :disabled="!talkUrl.trim()" @click="onTalkConfirm">确定</button>
+      </div>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.talk-dialog-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.talk-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--color-panel);
+}
+
+.talk-dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.talk-dialog-input {
+  width: 100%;
+}
+
+.talk-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+</style>
