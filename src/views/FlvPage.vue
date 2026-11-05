@@ -3,12 +3,15 @@ import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import mpegts from 'mpegts.js'
 import PlayerShell from '../components/PlayerShell.vue'
 import InfoPanel from '../components/InfoPanel.vue'
+import StreamSourceBar from '../components/StreamSourceBar.vue'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
 import { formatVideoCodecName, formatAudioCodecName, formatDuration } from '../utils/format.js'
 
 // FLV 主路径（方案 A）：mpegts.js 解封装 → MSE → <video>。硬解优先，不做软解兜底。
 const videoEl = useTemplateRef('videoEl')
+const sourceBar = useTemplateRef('sourceBar')
+const hasSourceUrl = ref(false)
 const url = ref('https://mister-ben.github.io/videojs-flvjs/bbb.flv')
 // 直播/回放选择：回放 = mpegts.js 非直播模式（isLive:false，支持暂停/倍速/跳播）
 const MODE_OPTIONS = [
@@ -39,6 +42,7 @@ const capRows = ref([])
 let player = null
 
 const isVod = computed(() => streamMode.value === 'vod')
+const canPlay = computed(() => (isVod.value ? !!url.value.trim() : hasSourceUrl.value))
 
 // 视频信息（与各播放页统一口径）：mpegts.js 仅走 MSE→<video>，解码模式固定为硬解
 const videoRows = computed(() => {
@@ -67,9 +71,10 @@ function destroyPlayer() {
   isPaused.value = false
 }
 
-function play() {
-  const target = url.value.trim()
-  if (!isAllowedStreamUrl(target)) {
+async function play() {
+  // 直播地址可在 StreamSourceBar 获取或手动输入，回放用手动地址（回放取址待做）
+  const target = isVod.value ? url.value.trim() : await sourceBar.value.ensureUrl()
+  if (!target || !isAllowedStreamUrl(target)) {
     return
   }
   if (!mpegts.isSupported()) {
@@ -176,13 +181,21 @@ onUnmounted(destroyPlayer)
         <option v-for="opt in MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <input
+        v-show="isVod"
         v-model="url"
         class="input url-input"
         type="text"
         placeholder="粘贴 HTTP-FLV / WS-FLV 播放地址"
         @keyup.enter="play"
       />
-      <button class="btn btn-primary" type="button" @click="play">播放</button>
+      <StreamSourceBar
+        v-show="!isVod"
+        ref="sourceBar"
+        v-model:has-url="hasSourceUrl"
+        protocol-type="http_flv"
+        @play="play"
+      />
+      <button class="btn btn-primary" type="button" :disabled="!canPlay" @click="play">播放</button>
       <button class="btn" type="button" :disabled="!hasPlayer" @click="destroyPlayer">停止</button>
     </template>
 

@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import PlayerShell from '../components/PlayerShell.vue'
 import InfoPanel from '../components/InfoPanel.vue'
+import StreamSourceBar from '../components/StreamSourceBar.vue'
 import { loadScript } from '../utils/scriptLoader.js'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
@@ -40,6 +41,8 @@ const SPEED_OPTIONS = [
 ]
 
 const containerEl = useTemplateRef('containerEl')
+const sourceBar = useTemplateRef('sourceBar')
+const hasSourceUrl = ref(false)
 const playUrl = ref('wss://mediadev02.cloudsee.com:20380/live/12221S8GAR8Y?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfbW9kZSI6IlB1YmxpY0Nsb3VkIiwiY2hhbm5lbF9pZCI6MCwiZGV2aWNlX2lkIjoiMTIyMjFTOEdBUjhZIiwiZXhwaXJlX3RpbWUiOjE4MDM4NTkyMDAsImlubmVyX2FkZHIiOiIxOTIuMTY4LjExNy42OjcwNzAiLCJtYXhfcGxheV9kdXJhdGlvbiI6MCwic3RyZWFtX3R5cGUiOjAsInRlbmFudF9pZCI6IiIsInVzZXJfaWQiOiI1NGFiYjE1OTNlYzM0YmVkODFkOGIwMWRkNTc4MTY0ZSJ9.FXnunl2VLMFlcw4eK_kA1lmz7UxKBsvYpC8SpoOw4Yo')
 const streamMode = ref('live')
 const decodeType = ref(0)
@@ -120,6 +123,7 @@ const decodeMode = computed(() => {
 })
 
 const isVod = computed(() => streamMode.value === 'vod')
+const canPlay = computed(() => (isVod.value ? !!playUrl.value.trim() : hasSourceUrl.value))
 
 const videoRows = computed(() => {
   const v = metaInfo.value?.v
@@ -253,8 +257,9 @@ async function onPlay() {
   if (!codecReady.value) {
     return
   }
-  const target = playUrl.value.trim()
-  if (!isAllowedStreamUrl(target)) {
+  // 直播地址可在 StreamSourceBar 获取或手动输入，回放用手动地址（回放取址待做）
+  const target = isVod.value ? playUrl.value.trim() : await sourceBar.value.ensureUrl()
+  if (!target || !isAllowedStreamUrl(target)) {
     return
   }
   try {
@@ -494,11 +499,19 @@ onUnmounted(() => {
         <option v-for="opt in MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <input
+        v-show="isVod"
         v-model="playUrl"
         class="input url-input"
         type="text"
         placeholder="播放地址（ws://…，SDK 按 URL 区分直播/回放）"
         @keyup.enter="onPlay"
+      />
+      <StreamSourceBar
+        v-show="!isVod"
+        ref="sourceBar"
+        v-model:has-url="hasSourceUrl"
+        protocol-type="wss"
+        @play="onPlay"
       />
       <label class="checkbox-label">
         解码模式
@@ -506,7 +519,7 @@ onUnmounted(() => {
           <option v-for="opt in DECODE_TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
       </label>
-      <button class="btn btn-primary" type="button" :disabled="!codecReady" @click="onPlay">播放</button>
+      <button class="btn btn-primary" type="button" :disabled="!codecReady || !canPlay" @click="onPlay">播放</button>
       <button class="btn" type="button" :disabled="!hasPlayer" @click="onStop">停止</button>
     </template>
 
@@ -518,7 +531,7 @@ onUnmounted(() => {
     <template #overlay>
       <!-- 回放模式：暂停/播放、倍速、跳播、录像、下载（对讲为直播专属，不渲染） -->
       <template v-if="isVod">
-        <button class="btn" type="button" :disabled="!hasPlayer && !codecReady" @click="onTogglePause">
+        <button class="btn" type="button" :disabled="!hasPlayer && (!codecReady || !canPlay)" @click="onTogglePause">
           {{ !hasPlayer ? '播放' : isPaused ? '播放' : '暂停' }}
         </button>
         <span class="field-label">倍速</span>
@@ -554,7 +567,12 @@ onUnmounted(() => {
         <button class="btn" type="button" :disabled="!hasPlayer" @click="onScreenshot">截图</button>
       </template>
       <template v-else>
-        <button class="btn" type="button" :disabled="!hasPlayer && !codecReady" @click="hasPlayer ? onStop() : onPlay()">
+        <button
+          class="btn"
+          type="button"
+          :disabled="!hasPlayer && (!codecReady || !canPlay)"
+          @click="hasPlayer ? onStop() : onPlay()"
+        >
           {{ hasPlayer ? '停止' : '播放' }}
         </button>
         <button class="btn" type="button" @click="toggleMute">

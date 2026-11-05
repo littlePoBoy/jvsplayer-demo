@@ -26,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | HLS 对照 | h265web.js | 同上 | 要实现 |
 | 说明页 | — | 双方案对比、许可、兼容、参考候选 | 要实现 |
 
-三协议主路径与对照页共用 UI 骨架：左 = 播放区（右下角悬浮控件条：播放/暂停〈FLV/HLS〉或播放/停止〈私协页〉、静音、音量、全屏、截图/录像〈仅私协页〉，悬停显示、鼠标移开隐藏；FLV/HLS 方案无截图/录像能力则不渲染对应按钮）+ 状态行（仅私协页，显示操作回执；FLV/HLS 页无状态行，播放状态见右信息栏）；右 = 视频信息、浏览器/解码能力探测结果（不出播放地址信息栏，播放地址只在顶栏输入框）；顶 = 播放地址等控件（含播放/停止），**无设备号、无通道号**。测试流不做内置，URL 输入框占位即可。
+三协议主路径与对照页共用 UI 骨架：左 = 播放区（右下角悬浮控件条：播放/暂停〈FLV/HLS〉或播放/停止〈私协页〉、静音、音量、全屏、截图/录像〈仅私协页〉，悬停显示、鼠标移开隐藏；FLV/HLS 方案无截图/录像能力则不渲染对应按钮）+ 状态行（仅私协页，显示操作回执；FLV/HLS 页无状态行，播放状态见右信息栏）；右 = 视频信息、浏览器/解码能力探测结果（播放地址不出现在右信息栏）；顶 = 平台取流控件（AccessToken、设备 SN、通道 ID、高标清切换、「获取地址」→ 调 openAPI `get_realtime_url_standard` 取播放地址并填入输入框，输入框也可手动填写，带复制按钮，见 StreamSourceBar.vue）+ 播放/停止等控件。直播播放地址可手动填写；高标清映射：高清=主码流（streamId 0）、标清=次码流（streamId 1），取到的地址 180 秒有效。取流协议按页固定：私协页 `wss`、FLV 两页 `http_flv`、HLS 两页 `hls`（HLS 两页暂只做直播取流，点播随回放一起做）。回放模式保留手动 URL 输入框（回放取址待做）。测试流不做内置，输入框占位即可。
 
 ## websdk 集成要点
 
@@ -64,3 +64,4 @@ SDK 文件在 `websdk/websdk/`（闭源 bundle，勿修改）
 
 - `web-player-tech-scheme.md` — 技术方案：页面划分、双方案（A: mpegts.js+hls.js / B: h265web.js）对比、选型建议。实现的权威依据。
 - `websdk/demo的使用说明.md` — websdk API 全量说明：初始化、直播/回放/对讲/下载/录像接口、事件表。
+- https://open.cloudsee.com/doc/docs/openAPI/media/get_realtime_url_standard — 平台取流接口（POST，X-Token 鉴权）：直播页播放地址来源；另有 JVMP 专属 `GetRealtimeUrl`（返回 jvmpUrl），若私协页 wss 标准地址 websdk 播不了可切换。

@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import PlayerShell from '../components/PlayerShell.vue'
 import InfoPanel from '../components/InfoPanel.vue'
+import StreamSourceBar from '../components/StreamSourceBar.vue'
 import { loadScript } from '../utils/scriptLoader.js'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
@@ -13,6 +14,8 @@ const H265WEB_BASE = `${import.meta.env.BASE_URL}h265web/`
 const PLAYER_ID = 'flv-alt-stage'
 
 const stageEl = useTemplateRef('stageEl')
+const sourceBar = useTemplateRef('sourceBar')
+const hasSourceUrl = ref(false)
 const url = ref('https://mister-ben.github.io/videojs-flvjs/bbb.flv')
 // 直播/回放选择：h265web.js 按流时长自动识别直播/回放（duration>0 即回放），选择框只切换悬浮条形态
 const MODE_OPTIONS = [
@@ -43,6 +46,7 @@ const capRows = ref([])
 let player = null
 
 const isVod = computed(() => streamMode.value === 'vod')
+const canPlay = computed(() => (isVod.value ? !!url.value.trim() : hasSourceUrl.value))
 
 // 流时长（秒，video_probe_callback 回执 media_info.duration）：>0 才可跳播
 const duration = computed(() => {
@@ -93,8 +97,9 @@ function releasePlayer() {
 }
 
 async function play() {
-  const target = url.value.trim()
-  if (!isAllowedStreamUrl(target)) {
+  // 直播地址可在 StreamSourceBar 获取或手动输入，回放用手动地址（回放取址待做）
+  const target = isVod.value ? url.value.trim() : await sourceBar.value.ensureUrl()
+  if (!target || !isAllowedStreamUrl(target)) {
     return
   }
   await loadScript(`${H265WEB_BASE}h265web.js`)
@@ -208,11 +213,19 @@ onUnmounted(releasePlayer)
         <option v-for="opt in MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <input
+        v-show="isVod"
         v-model="url"
         class="input url-input"
         type="text"
         placeholder="粘贴 HTTP-FLV / WS-FLV 播放地址（h265web.js 对照）"
         @keyup.enter="play"
+      />
+      <StreamSourceBar
+        v-show="!isVod"
+        ref="sourceBar"
+        v-model:has-url="hasSourceUrl"
+        protocol-type="http_flv"
+        @play="play"
       />
       <span class="field-label">解码内核</span>
       <select v-model="core" class="select">
@@ -220,7 +233,7 @@ onUnmounted(releasePlayer)
         <option value="webcodec_hevc">WebCodec（硬解）</option>
         <option value="wasm_hevc">WASM（软解）</option>
       </select>
-      <button class="btn btn-primary" type="button" @click="play">播放</button>
+      <button class="btn btn-primary" type="button" :disabled="!canPlay" @click="play">播放</button>
       <button class="btn" type="button" :disabled="!hasPlayer" @click="releasePlayer">停止</button>
     </template>
 

@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import PlayerShell from '../components/PlayerShell.vue'
 import InfoPanel from '../components/InfoPanel.vue'
+import StreamSourceBar from '../components/StreamSourceBar.vue'
 import { loadScript } from '../utils/scriptLoader.js'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
@@ -14,7 +15,8 @@ const H265WEB_BASE = `${import.meta.env.BASE_URL}h265web/`
 const PLAYER_ID = 'hls-alt-stage'
 
 const stageEl = useTemplateRef('stageEl')
-const url = ref('')
+const sourceBar = useTemplateRef('sourceBar')
+const hasSourceUrl = ref(false)
 const volume = ref(1)
 const isMuted = ref(false)
 const core = ref('')
@@ -68,8 +70,9 @@ function releasePlayer() {
 }
 
 async function play() {
-  const target = url.value.trim()
-  if (!isAllowedStreamUrl(target)) {
+  // 直播地址可在 StreamSourceBar 获取或手动输入；点播（回放）取址待做
+  const target = await sourceBar.value.ensureUrl()
+  if (!target || !isAllowedStreamUrl(target)) {
     return
   }
   await loadScript(`${H265WEB_BASE}h265web.js`)
@@ -153,20 +156,14 @@ onUnmounted(releasePlayer)
 <template>
   <PlayerShell>
     <template #top>
-      <input
-        v-model="url"
-        class="input url-input"
-        type="text"
-        placeholder="粘贴 HLS 播放地址（.m3u8，h265web.js 对照）"
-        @keyup.enter="play"
-      />
+      <StreamSourceBar ref="sourceBar" v-model:has-url="hasSourceUrl" protocol-type="hls" @play="play" />
       <span class="field-label">解码内核</span>
       <select v-model="core" class="select">
         <option value="">Auto</option>
         <option value="webcodec_hevc">WebCodec（硬解）</option>
         <option value="wasm_hevc">WASM（软解）</option>
       </select>
-      <button class="btn btn-primary" type="button" @click="play">播放</button>
+      <button class="btn btn-primary" type="button" :disabled="!hasSourceUrl" @click="play">播放</button>
       <button class="btn" type="button" :disabled="!hasPlayer" @click="releasePlayer">停止</button>
     </template>
 
@@ -176,7 +173,7 @@ onUnmounted(releasePlayer)
 
     <template #overlay>
       <!-- h265web.js 无截图/录像能力，不渲染对应按钮 -->
-      <button class="btn" type="button" :disabled="!hasPlayer" @click="togglePause">
+      <button class="btn" type="button" :disabled="!hasPlayer && !hasSourceUrl" @click="togglePause">
         {{ isPaused ? '播放' : '暂停' }}
       </button>
       <button class="btn" type="button" @click="toggleMute">

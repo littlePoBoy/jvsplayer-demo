@@ -3,13 +3,15 @@ import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import Hls from 'hls.js'
 import PlayerShell from '../components/PlayerShell.vue'
 import InfoPanel from '../components/InfoPanel.vue'
+import StreamSourceBar from '../components/StreamSourceBar.vue'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
 import { formatVideoCodecName, formatAudioCodecName } from '../utils/format.js'
 
 // HLS 主路径（方案 A）：hls.js 解封装 → MSE → <video>（Safari 走原生 HLS）。硬解优先，不做软解兜底。
 const videoEl = useTemplateRef('videoEl')
-const url = ref('')
+const sourceBar = useTemplateRef('sourceBar')
+const hasSourceUrl = ref(false)
 const volume = ref(1)
 const isMuted = ref(false)
 const hasPlayer = ref(false)
@@ -62,9 +64,10 @@ function destroyPlayer() {
   isPaused.value = false
 }
 
-function play() {
-  const target = url.value.trim()
-  if (!isAllowedStreamUrl(target)) {
+async function play() {
+  // 直播地址可在 StreamSourceBar 获取或手动输入；点播（回放）取址待做
+  const target = await sourceBar.value.ensureUrl()
+  if (!target || !isAllowedStreamUrl(target)) {
     return
   }
   destroyPlayer()
@@ -137,14 +140,8 @@ onUnmounted(destroyPlayer)
 <template>
   <PlayerShell>
     <template #top>
-      <input
-        v-model="url"
-        class="input url-input"
-        type="text"
-        placeholder="粘贴 HLS 播放地址（.m3u8）"
-        @keyup.enter="play"
-      />
-      <button class="btn btn-primary" type="button" @click="play">播放</button>
+      <StreamSourceBar ref="sourceBar" v-model:has-url="hasSourceUrl" protocol-type="hls" @play="play" />
+      <button class="btn btn-primary" type="button" :disabled="!hasSourceUrl" @click="play">播放</button>
       <button class="btn" type="button" :disabled="!hasPlayer" @click="destroyPlayer">停止</button>
     </template>
 
@@ -154,7 +151,7 @@ onUnmounted(destroyPlayer)
 
     <template #overlay>
       <!-- hls.js 无截图/录像能力，不渲染对应按钮 -->
-      <button class="btn" type="button" :disabled="!hasPlayer" @click="togglePause">
+      <button class="btn" type="button" :disabled="!hasPlayer && !hasSourceUrl" @click="togglePause">
         {{ isPaused ? '播放' : '暂停' }}
       </button>
       <button class="btn" type="button" @click="toggleMute">
