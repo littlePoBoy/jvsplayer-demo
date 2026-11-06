@@ -127,6 +127,14 @@ body {
   display: block;
 }
 
+/* 播放区固定 16:9，非 16:9 的视频拉伸铺满播放区（无黑边，画面会变形）；
+   h265web.js 对照页的内部 video 同样处理（私协页 websdk 不受影响） */
+.stage > video,
+#flv-alt-stage video,
+#hls-alt-stage video {
+  object-fit: fill;
+}
+
 .stage:fullscreen,
 .stage:-webkit-full-screen {
   /* 全屏目标为 .stage 时取消 16:9 约束，铺满屏幕 */

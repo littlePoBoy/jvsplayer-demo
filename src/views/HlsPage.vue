@@ -17,6 +17,7 @@ const isMuted = ref(false)
 const hasPlayer = ref(false)
 const isPaused = ref(false)
 const levelInfo = ref(null)
+const playError = ref('') // 播放失败原因（hls.js 致命错误），空 = 无错误
 const decodePath = ref('') // 'mse' | 'native' | ''（未播放）
 const capRows = ref([])
 
@@ -37,6 +38,7 @@ const videoRows = computed(() => {
     { label: '解码模式', value: DECODE_PATH_LABELS[decodePath.value] ?? null },
     { label: '音频编码', value: formatAudioCodecName(li?.audioCodec) },
     { label: '音频采样率', value: null },
+    { label: '播放状态', value: playError.value || null },
   ]
 })
 
@@ -48,6 +50,13 @@ function onManifestParsed(_event, data) {
     videoCodec: first.videoCodec ?? null,
     audioCodec: first.audioCodec ?? null,
     frameRate: first.frameRate ?? 0,
+  }
+}
+
+// 失败时明确提示（不做软解兜底）：H.265 失败可换浏览器 / 切 H.264 / 看 HLS 对照页
+function onHlsError(_event, data) {
+  if (data.fatal) {
+    playError.value = `${data.type}/${data.details}${data.reason ? `：${data.reason}` : ''}`
   }
 }
 
@@ -73,11 +82,13 @@ async function play() {
   destroyPlayer()
   const video = videoEl.value
   levelInfo.value = null
+  playError.value = ''
   decodePath.value = ''
   if (Hls.isSupported()) {
     decodePath.value = 'mse'
     const instance = new Hls({ enableWorker: true })
     instance.on(Hls.Events.MANIFEST_PARSED, onManifestParsed)
+    instance.on(Hls.Events.ERROR, onHlsError)
     instance.loadSource(target)
     instance.attachMedia(video)
     hls = instance

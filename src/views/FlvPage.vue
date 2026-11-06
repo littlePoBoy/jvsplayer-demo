@@ -37,6 +37,7 @@ const playSpeed = ref(1)
 const curTime = ref(0)
 const duration = ref(0)
 const mediaInfo = ref(null)
+const playError = ref('') // 播放失败原因（mpegts.js ERROR 事件），空 = 无错误
 const capRows = ref([])
 
 let player = null
@@ -54,11 +55,17 @@ const videoRows = computed(() => {
     { label: '解码模式', value: 'MSE（video标签）' },
     { label: '音频编码', value: mi?.hasAudio ? formatAudioCodecName(mi?.audioCodec) : '无音频' },
     { label: '音频采样率', value: mi?.audioSampleRate ? `${mi.audioSampleRate} Hz` : null },
+    { label: '播放状态', value: playError.value || null },
   ]
 })
 
 function onMediaInfo(mi) {
   mediaInfo.value = { ...mi }
+}
+
+// 失败时明确提示（不做软解兜底）：H.265 失败可换浏览器 / 切 H.264 / 看 FLV 对照页
+function onPlayerError(errorType, errorDetail, errorInfo) {
+  playError.value = `${errorType}/${errorDetail}${errorInfo?.msg ? `：${errorInfo.msg}` : ''}`
 }
 
 function destroyPlayer() {
@@ -84,11 +91,13 @@ async function play() {
   const instance = mpegts.createPlayer({ type: 'flv', isLive: streamMode.value === 'live', url: target }, { enableWorker: true })
   instance.attachMediaElement(videoEl.value)
   instance.on(mpegts.Events.MEDIA_INFO, onMediaInfo)
+  instance.on(mpegts.Events.ERROR, onPlayerError)
   player = instance
   hasPlayer.value = true
   instance.load()
   instance.play().catch(() => {}) // 自动播放被浏览器拦截时静默，用户可点击播放按钮
   mediaInfo.value = null
+  playError.value = ''
   isPaused.value = false
   playSpeed.value = 1
   curTime.value = 0
