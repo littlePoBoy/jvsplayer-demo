@@ -16,6 +16,7 @@ const volume = ref(1)
 const isMuted = ref(false)
 const hasPlayer = ref(false)
 const isPaused = ref(false)
+const isFullscreen = ref(false)
 const levelInfo = ref(null)
 const playError = ref('') // 播放失败原因（hls.js 致命错误），空 = 无错误
 const decodePath = ref('') // 'mse' | 'native' | ''（未播放）
@@ -137,15 +138,28 @@ function toggleMute() {
 }
 
 function goFullscreen() {
-  // 全屏 .stage（悬浮条的祖先）而不是 video，保证全屏内悬浮条仍可操作
+  // 已全屏则退出；否则全屏 .stage（悬浮条的祖先）而不是 video，保证全屏内悬浮条仍可操作
+  if (document.fullscreenElement) {
+    document.exitFullscreen()
+    return
+  }
   videoEl.value?.parentElement?.requestFullscreen?.()
 }
 
+// 按钮文案跟随真实全屏状态（含用户按 Esc 退出）
+function onFullscreenChange() {
+  isFullscreen.value = !!document.fullscreenElement
+}
+
 onMounted(async () => {
+  document.addEventListener('fullscreenchange', onFullscreenChange)
   capRows.value = await probeCapabilities()
 })
 
-onUnmounted(destroyPlayer)
+onUnmounted(() => {
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+  destroyPlayer()
+})
 </script>
 
 <template>
@@ -170,7 +184,9 @@ onUnmounted(destroyPlayer)
       </button>
       <span class="field-label">音量</span>
       <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
-      <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
+      <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">
+        {{ isFullscreen ? '退出全屏' : '全屏' }}
+      </button>
     </template>
 
     <template #info>
