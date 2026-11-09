@@ -650,6 +650,8 @@ onUnmounted(() => {
         </select> -->
         <!-- <span class="field-label">{{ formatDateTime(curTs) }}</span> -->
         <!-- <button class="btn" type="button" :disabled="!hasPlayer" @click="onSeekClick">跳播</button> -->
+        <button class="btn" type="button" :disabled="!hasPlayer" @click="onScreenshot">截图</button>
+
         <button
           class="btn"
           type="button"
@@ -674,7 +676,6 @@ onUnmounted(() => {
         <span class="field-label">音量</span>
         <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
         <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
-        <button class="btn" type="button" :disabled="!hasPlayer" @click="onScreenshot">截图</button>
       </template>
       <template v-else>
         <button
