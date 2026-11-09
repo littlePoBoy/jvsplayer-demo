@@ -201,7 +201,7 @@ onUnmounted(destroyPlayer)
         v-show="!isVod"
         ref="sourceBar"
         v-model:has-url="hasSourceUrl"
-        protocol-type="http_flv"
+        protocol-type="https_flv"
         @play="play"
       />
       <button class="btn btn-primary" type="button" :disabled="!canPlay" @click="play">播放</button>

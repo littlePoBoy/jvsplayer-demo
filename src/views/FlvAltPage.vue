@@ -224,7 +224,7 @@ onUnmounted(releasePlayer)
         v-show="!isVod"
         ref="sourceBar"
         v-model:has-url="hasSourceUrl"
-        protocol-type="http_flv"
+        protocol-type="https_flv"
         @play="play"
       />
       <span class="field-label">解码内核</span>

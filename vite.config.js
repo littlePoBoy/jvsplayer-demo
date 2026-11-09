@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 
 const OPENAPI_BASE_URL = '/openapi'
 const OPENAPI_PROXY_TARGET = 'https://192.168.117.4:7443'
-
+const OPENAPI_PROXY_TARGET_TEST = 'https://apitest.cloudsee.com:6443'
 // base: './' 让构建产物可直接从任意相对路径部署（静态目录 / 内网 nginx）。
 export default defineConfig({
   base: './',
@@ -14,7 +14,7 @@ export default defineConfig({
   server: {
     proxy: {
       [OPENAPI_BASE_URL]: {
-        target: OPENAPI_PROXY_TARGET,
+        target: OPENAPI_PROXY_TARGET_TEST,
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/openapi/, ''),
