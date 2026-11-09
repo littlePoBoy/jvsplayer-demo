@@ -589,15 +589,6 @@ onUnmounted(() => {
       <select v-model="streamMode" class="select" @change="onModeChange">
         <option v-for="opt in MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
-      <!-- <input
-        v-show="isVod"
-        v-model="playUrl"
-        class="input url-input"
-        type="text"
-        placeholder="播放地址（ws://…，SDK 按 URL 区分直播/回放）"
-        @input="activeRecordKey = ''"
-        @keyup.enter="onPlay"
-      /> -->
       <RecordSourceBar
         v-show="isVod"
         ref="recordBar"
@@ -644,12 +635,6 @@ onUnmounted(() => {
         <select v-model.number="playSpeed" class="select" :disabled="!hasPlayer" @change="onSpeedChange">
           <option v-for="opt in SPEED_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
-        <!-- <span class="field-label">时间轴</span>
-        <select v-model.number="timelineRange" class="select">
-          <option v-for="opt in TIMELINE_RANGE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select> -->
-        <!-- <span class="field-label">{{ formatDateTime(curTs) }}</span> -->
-        <!-- <button class="btn" type="button" :disabled="!hasPlayer" @click="onSeekClick">跳播</button> -->
         <button class="btn" type="button" :disabled="!hasPlayer" @click="onScreenshot">截图</button>
 
         <button

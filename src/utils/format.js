@@ -68,18 +68,3 @@ export function formatAudioCodecName(raw) {
   }
   return String(raw)
 }
-
-export function formatBytes(bytes) {
-  const n = Number(bytes)
-  if (!Number.isFinite(n) || n < 0) {
-    return '-'
-  }
-  const units = ['B', 'KB', 'MB', 'GB']
-  let value = n
-  let i = 0
-  while (value >= 1024 && i < units.length - 1) {
-    value /= 1024
-    i += 1
-  }
-  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
-}

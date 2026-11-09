@@ -110,7 +110,6 @@ defineExpose({ fetchUrl, ensureUrl })
     </div>
     <button class="btn" type="button" @click="fetchUrl">获取地址</button>
     <div class="source-url-group">
-      <!-- <span class="field-label">播放地址</span> -->
       <input
         v-model="playUrl"
         class="input source-url"
