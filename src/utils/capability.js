@@ -76,7 +76,7 @@ export async function probeCapabilities() {
     { label: 'WebCodecs H.264', value: toSupport(wcH264) },
     { label: 'WebCodecs H.265', value: toSupport(wcHevc) },
     { label: '原生 HLS（Safari）', value: nativeHls ? '支持' : '不支持' },
-    { label: '跨源隔离（多线程 WASM）', value: toSupport(window.crossOriginIsolated === true) },
+    { label: 'WebAssembly', value: toSupport(typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function') },
     { label: 'User-Agent', value: navigator.userAgent },
   ]
 }
