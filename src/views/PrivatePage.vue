@@ -3,9 +3,11 @@ import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import PlayerShell from '../components/PlayerShell.vue'
 import InfoPanel from '../components/InfoPanel.vue'
 import StreamSourceBar from '../components/StreamSourceBar.vue'
+import RecordSourceBar from '../components/RecordSourceBar.vue'
 import { loadScript } from '../utils/scriptLoader.js'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
+import RecordTimeline from '../components/RecordTimeline.vue'
 import { formatDateTime } from '../utils/format.js'
 
 // 私协页：公司 websdk（JVMP 私协）直播 / 回放 / 截图 / 录像。
@@ -29,6 +31,13 @@ const MODE_OPTIONS = [
   { value: 'live', label: '直播' },
   { value: 'vod', label: '回放' },
 ]
+// 时间轴刻度档位（JTimeLine timeWidth 下标；3 天档的拖动与录像段绘制原实现未支持，不提供）
+const TIMELINE_RANGE_OPTIONS = [
+  { value: 0, label: '1分钟' },
+  { value: 1, label: '30分钟' },
+  { value: 2, label: '1小时' },
+  { value: 3, label: '1天' },
+]
 // 回放倍速（SetSpeed 取值，demo的使用说明.md 2.2.9）
 const SPEED_OPTIONS = [
   { value: 1, label: '1' },
@@ -42,6 +51,11 @@ const SPEED_OPTIONS = [
 
 const containerEl = useTemplateRef('containerEl')
 const sourceBar = useTemplateRef('sourceBar')
+const recordBar = useTemplateRef('recordBar')
+const records = ref([]) // get_record_list 返回的录像文件
+const recordTotal = ref(0)
+const activeRecordKey = ref('')
+const timelineRange = ref(2) // JTimeLine 刻度档位下标，默认 1 小时
 const hasSourceUrl = ref(false)
 const playUrl = ref('wss://mediadev02.cloudsee.com:20380/live/12221S8GAR8Y?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfbW9kZSI6IlB1YmxpY0Nsb3VkIiwiY2hhbm5lbF9pZCI6MCwiZGV2aWNlX2lkIjoiMTIyMjFTOEdBUjhZIiwiZXhwaXJlX3RpbWUiOjE4MDM4NTkyMDAsImlubmVyX2FkZHIiOiIxOTIuMTY4LjExNy42OjcwNzAiLCJtYXhfcGxheV9kdXJhdGlvbiI6MCwic3RyZWFtX3R5cGUiOjAsInRlbmFudF9pZCI6IiIsInVzZXJfaWQiOiI1NGFiYjE1OTNlYzM0YmVkODFkOGIwMWRkNTc4MTY0ZSJ9.FXnunl2VLMFlcw4eK_kA1lmz7UxKBsvYpC8SpoOw4Yo')
 const streamMode = ref('live')
@@ -280,6 +294,83 @@ async function onPlay() {
   }
 }
 
+// ---------- 录像列表（回放） ----------
+
+const RECORD_TYPE_NAMES = { alarm: '报警', normal: '普通' }
+
+function recordKey(rec) {
+  return `${rec.fileName}|${rec.startTime}`
+}
+
+// yyyyMMddHHmmss → HH:mm:ss
+function formatRecordClock(value) {
+  const s = String(value ?? '')
+  return s.length === 14 ? `${s.slice(8, 10)}:${s.slice(10, 12)}:${s.slice(12, 14)}` : s
+}
+
+// yyyyMMddHHmmss → unix 秒（按浏览器本地时区解析，默认设备与浏览器同时区）
+function parseRecordTime(value) {
+  const s = String(value ?? '')
+  if (s.length !== 14) {
+    return null
+  }
+  const ms = new Date(
+    Number(s.slice(0, 4)),
+    Number(s.slice(4, 6)) - 1,
+    Number(s.slice(6, 8)),
+    Number(s.slice(8, 10)),
+    Number(s.slice(10, 12)),
+    Number(s.slice(12, 14)),
+  ).getTime()
+  return Number.isFinite(ms) ? ms / 1000 : null
+}
+
+// 各录像的起止 unix 秒；时间轴据此画出有录像的时间段
+const recordSpans = computed(() =>
+  records.value
+    .map((rec) => ({ rec, start: parseRecordTime(rec.startTime), end: parseRecordTime(rec.endTime) }))
+    .filter((span) => span.start !== null && span.end !== null),
+)
+// JTimeLine 的 timeSection 用毫秒
+const timelineSections = computed(() =>
+  recordSpans.value.map((span) => ({ startTime: span.start * 1000, endTime: span.end * 1000 })),
+)
+
+// 时间轴拖动松手：目标时刻落在某段录像内才有效。
+// 播放地址按单个录像的起止取得，所以目标在当前录像内用 SetStartTime，在其他录像内则换取该录像的地址重新播放再跳转。
+async function onTimelineSeek(unixSeconds) {
+  const target = Math.floor(unixSeconds)
+  const span = recordSpans.value.find((s) => target >= s.start && target <= s.end)
+  if (!webplayer || !span) {
+    return
+  }
+  if (!hasPlayer.value || activeRecordKey.value !== recordKey(span.rec)) {
+    await onPlayRecord(span.rec)
+    if (!hasPlayer.value) {
+      return
+    }
+  }
+  curTs.value = target // 先行更新进度，避免等下一次轮询才动
+  webplayer.SetStartTime(target).catch((err) => console.warn('SetStartTime:', err))
+}
+
+async function onPlayRecord(rec) {
+  if (!webplayer || !codecReady.value) {
+    return
+  }
+  const url = await recordBar.value.getPlaybackUrl(rec)
+  if (!url) {
+    return
+  }
+  activeRecordKey.value = recordKey(rec)
+  playUrl.value = url
+  // 切换录像前先停掉当前播放（Stop 同步；media_play_stopped 早于 Play 返回，不会覆盖 onPlay 的状态）
+  if (hasPlayer.value || isDownloading.value || isRecording.value) {
+    onStop()
+  }
+  await onPlay()
+}
+
 function onStop() {
   if (!webplayer) {
     return
@@ -493,18 +584,25 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <PlayerShell>
+  <PlayerShell :overlay-wide="isVod">
     <template #top>
       <select v-model="streamMode" class="select" @change="onModeChange">
         <option v-for="opt in MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
-      <input
+      <!-- <input
         v-show="isVod"
         v-model="playUrl"
         class="input url-input"
         type="text"
         placeholder="播放地址（ws://…，SDK 按 URL 区分直播/回放）"
+        @input="activeRecordKey = ''"
         @keyup.enter="onPlay"
+      /> -->
+      <RecordSourceBar
+        v-show="isVod"
+        ref="recordBar"
+        v-model:records="records"
+        v-model:total="recordTotal"
       />
       <StreamSourceBar
         v-show="!isVod"
@@ -531,6 +629,14 @@ onUnmounted(() => {
     <template #overlay>
       <!-- 回放模式：暂停/播放、倍速、跳播、录像、下载（对讲为直播专属，不渲染） -->
       <template v-if="isVod">
+        <!-- 第一行：进度条（官方 JTimeLine，红色段 = 有录像）；其下为控制按钮 -->
+        <RecordTimeline
+          :cur-ts="curTs"
+          :sections="timelineSections"
+          :range="timelineRange"
+          :disabled="!timelineSections.length"
+          @seek="onTimelineSeek"
+        />
         <button class="btn" type="button" :disabled="!hasPlayer && (!codecReady || !canPlay)" @click="onTogglePause">
           {{ !hasPlayer ? '播放' : isPaused ? '播放' : '暂停' }}
         </button>
@@ -538,8 +644,12 @@ onUnmounted(() => {
         <select v-model.number="playSpeed" class="select" :disabled="!hasPlayer" @change="onSpeedChange">
           <option v-for="opt in SPEED_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
-        <span class="field-label">{{ formatDateTime(curTs) }}</span>
-        <button class="btn" type="button" :disabled="!hasPlayer" @click="onSeekClick">跳播</button>
+        <!-- <span class="field-label">时间轴</span>
+        <select v-model.number="timelineRange" class="select">
+          <option v-for="opt in TIMELINE_RANGE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select> -->
+        <!-- <span class="field-label">{{ formatDateTime(curTs) }}</span> -->
+        <!-- <button class="btn" type="button" :disabled="!hasPlayer" @click="onSeekClick">跳播</button> -->
         <button
           class="btn"
           type="button"
@@ -604,6 +714,36 @@ onUnmounted(() => {
       </template>
     </template>
 
+    <!-- 录像文件列表：独占一行，卡片横向滑动；封面接口不存在，用占位图 + 播放键 -->
+    <template #strip>
+      <section v-if="isVod" class="record-panel">
+        <h3 class="record-title">
+          录像文件列表
+          <span v-if="recordTotal" class="record-total">共 {{ recordTotal }} 条<template v-if="recordTotal > records.length">，仅展示前 {{ records.length }} 条</template></span>
+        </h3>
+        <p v-if="!records.length" class="record-empty">暂无录像，请填写凭据后点击“获取录像文件列表”</p>
+        <div v-else class="record-list">
+          <button
+            v-for="rec in records"
+            :key="recordKey(rec)"
+            type="button"
+            class="record-card"
+            :class="{ 'is-active': activeRecordKey === recordKey(rec) }"
+            :title="rec.fileName"
+            @click="onPlayRecord(rec)"
+          >
+            <span class="record-thumb">
+              <span class="record-play" aria-hidden="true"></span>
+              <span class="record-type" :class="{ 'is-alarm': rec.recordType === 'alarm' }">
+                {{ RECORD_TYPE_NAMES[rec.recordType] ?? rec.recordType ?? '-' }}
+              </span>
+            </span>
+            <span class="record-time">{{ formatRecordClock(rec.startTime) }} - {{ formatRecordClock(rec.endTime) }}</span>
+          </button>
+        </div>
+      </section>
+    </template>
+
     <template #info>
       <InfoPanel title="视频信息" :rows="videoRows" />
       <InfoPanel title="浏览器 / 解码能力" :rows="capRows" />
@@ -666,6 +806,114 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.record-panel {
+
+  padding-left: 12px;
+  padding-right: 12px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.record-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.record-total,
+.record-empty {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-sub);
+}
+
+.record-empty {
+  margin: 0;
+}
+
+/* 横向滑动：单行不换行，触摸/触控板左右滑，鼠标用底部滚动条 */
+.record-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+
+.record-card {
+  flex: 0 0 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+
+.record-card.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* 占位效果图（16:9）+ 居中播放键 */
+.record-thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #1f2937, #0b0d10);
+}
+
+.record-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  transition: background 0.15s ease;
+}
+
+.record-play::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-35%, -50%);
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent #fff;
+}
+
+.record-card:hover .record-play {
+  background: var(--color-primary);
+}
+
+.record-type {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+
+.record-type.is-alarm {
+  background: var(--color-danger);
+}
+
 .dialog-mask {
   position: fixed;
   inset: 0;

@@ -200,6 +200,11 @@ body {
   color: rgba(255, 255, 255, 0.75);
 }
 
+/* 撑满播放区宽度的悬浮条（回放：进度条在上、按钮在下） */
+.stage-overlay.is-wide {
+  left: 12px;
+}
+
 .stage-overlay input[type='range'] {
   accent-color: #fff;
 }
@@ -285,38 +290,6 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--color-text-sub);
-  white-space: nowrap;
-}
-
-/* ---------- 时间轴 ---------- */
-
-.timeline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 260px;
-  min-width: 220px;
-}
-
-.timeline-track {
-  position: relative;
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--color-border);
-  cursor: pointer;
-}
-
-.timeline-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 3px;
-  background: var(--color-primary);
-}
-
-.timeline-time {
-  font-variant-numeric: tabular-nums;
   color: var(--color-text-sub);
   white-space: nowrap;
 }

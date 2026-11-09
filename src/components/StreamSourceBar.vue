@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { token, deviceSn, channelId } from '../utils/credentials.js'
 
 // 平台取流控件（各直播页顶栏共用 UI 骨架）：
 // Token / 设备SN / 通道ID / 高标清 → openAPI get_realtime_url_standard 取播放地址。
@@ -11,27 +12,15 @@ const props = defineProps({
 })
 const emit = defineEmits(['play', 'update:hasUrl'])
 
-const STORAGE_KEYS = {
-  token: 'jvsplayer.stream-source.token',
-  deviceSn: 'jvsplayer.stream-source.device-sn',
-  channelId: 'jvsplayer.stream-source.channel-id',
-}
-
 const OPENAPI_BASE_URL = __OPENAPI_BASE_URL__.replace(/\/+$/, '')
 const ENDPOINT = `${OPENAPI_BASE_URL}/v1/api/device/video/get_realtime_url_standard`
 
-const token = ref(localStorage.getItem(STORAGE_KEYS.token) ?? '')
-const deviceSn = ref(localStorage.getItem(STORAGE_KEYS.deviceSn) ?? '')
-const channelId = ref(localStorage.getItem(STORAGE_KEYS.channelId) ?? '')
 const quality = ref(0) // 0=高清(主码流) 1=标清(次码流)
 const playUrl = ref('')
 const hasUrl = computed(() => !!playUrl.value.trim())
 const fetchError = ref('')
 const copied = ref(false)
 
-watch(token, (value) => localStorage.setItem(STORAGE_KEYS.token, value))
-watch(deviceSn, (value) => localStorage.setItem(STORAGE_KEYS.deviceSn, value))
-watch(channelId, (value) => localStorage.setItem(STORAGE_KEYS.channelId, value))
 watch(hasUrl, (value) => emit('update:hasUrl', value), { immediate: true })
 
 async function fetchUrl() {
