@@ -121,7 +121,7 @@ defineExpose({ fetchUrl, ensureUrl })
     </div>
     <button class="btn" type="button" @click="fetchUrl">获取地址</button>
     <div class="source-url-group">
-      <span class="field-label">播放地址</span>
+      <!-- <span class="field-label">播放地址</span> -->
       <input
         v-model="playUrl"
         class="input source-url"
@@ -145,16 +145,16 @@ defineExpose({ fetchUrl, ensureUrl })
 }
 
 .source-token {
-  flex: 1 1 220px;
+  flex: 1 1 180px;
   min-width: 180px;
 }
 
 .source-sn {
-  width: 140px;
+  width: 120px;
 }
 
 .source-channel {
-  width: 88px;
+  width: 48px;
 }
 
 /* 高标清切换：两态分段按钮 */
@@ -191,7 +191,7 @@ defineExpose({ fetchUrl, ensureUrl })
 }
 
 .source-url {
-  flex: 1 1 auto;
+  flex: 1 1 180px;
   min-width: 160px;
 }
 
