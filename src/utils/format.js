@@ -1,17 +1,5 @@
 /** 展示格式化工具（纯函数） */
 
-export function formatDateTime(unixSeconds) {
-  if (unixSeconds === null || unixSeconds === undefined || Number.isNaN(Number(unixSeconds))) {
-    return '-'
-  }
-  const date = new Date(Number(unixSeconds) * 1000)
-  const pad = (n) => String(n).padStart(2, '0')
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  )
-}
-
 export function formatDuration(seconds) {
   const sec = Math.floor(Number(seconds))
   if (!Number.isFinite(sec) || sec < 0) {

@@ -16,7 +16,7 @@ const PLAYER_ID = 'flv-alt-stage'
 const stageEl = useTemplateRef('stageEl')
 const sourceBar = useTemplateRef('sourceBar')
 const hasSourceUrl = ref(false)
-const url = ref('https://mister-ben.github.io/videojs-flvjs/bbb.flv')
+const url = ref('')
 // 直播/回放选择：h265web.js 按流时长自动识别直播/回放（duration>0 即回放），选择框只切换悬浮条形态
 const MODE_OPTIONS = [
   { value: 'live', label: '直播' },

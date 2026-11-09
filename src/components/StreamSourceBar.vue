@@ -76,7 +76,7 @@ function copyUrl() {
     .catch((err) => console.warn('复制失败：', err))
 }
 
-defineExpose({ fetchUrl, ensureUrl })
+defineExpose({ ensureUrl })
 </script>
 
 <template>

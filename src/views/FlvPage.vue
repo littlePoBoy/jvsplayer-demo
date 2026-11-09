@@ -12,7 +12,7 @@ import { formatVideoCodecName, formatAudioCodecName, formatDuration } from '../u
 const videoEl = useTemplateRef('videoEl')
 const sourceBar = useTemplateRef('sourceBar')
 const hasSourceUrl = ref(false)
-const url = ref('https://mister-ben.github.io/videojs-flvjs/bbb.flv')
+const url = ref('')
 // 直播/回放选择：回放 = mpegts.js 非直播模式（isLive:false，支持暂停/倍速/跳播）
 const MODE_OPTIONS = [
   { value: 'live', label: '直播' },

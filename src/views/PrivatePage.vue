@@ -8,7 +8,6 @@ import { loadScript } from '../utils/scriptLoader.js'
 import { probeCapabilities } from '../utils/capability.js'
 import { isAllowedStreamUrl } from '../utils/url.js'
 import RecordTimeline from '../components/RecordTimeline.vue'
-import { formatDateTime } from '../utils/format.js'
 
 // 私协页：公司 websdk（JVMP 私协）直播 / 回放 / 截图 / 录像。
 // 厂商要求：单 WebPlayer 实例承担全部业务；与开源方案页面级隔离。
@@ -31,13 +30,6 @@ const MODE_OPTIONS = [
   { value: 'live', label: '直播' },
   { value: 'vod', label: '回放' },
 ]
-// 时间轴刻度档位（JTimeLine timeWidth 下标；3 天档的拖动与录像段绘制原实现未支持，不提供）
-const TIMELINE_RANGE_OPTIONS = [
-  { value: 0, label: '1分钟' },
-  { value: 1, label: '30分钟' },
-  { value: 2, label: '1小时' },
-  { value: 3, label: '1天' },
-]
 // 回放倍速（SetSpeed 取值，demo的使用说明.md 2.2.9）
 const SPEED_OPTIONS = [
   { value: 1, label: '1' },
@@ -55,9 +47,8 @@ const recordBar = useTemplateRef('recordBar')
 const records = ref([]) // get_record_list 返回的录像文件
 const recordTotal = ref(0)
 const activeRecordKey = ref('')
-const timelineRange = ref(2) // JTimeLine 刻度档位下标，默认 1 小时
 const hasSourceUrl = ref(false)
-const playUrl = ref('wss://mediadev02.cloudsee.com:20380/live/12221S8GAR8Y?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfbW9kZSI6IlB1YmxpY0Nsb3VkIiwiY2hhbm5lbF9pZCI6MCwiZGV2aWNlX2lkIjoiMTIyMjFTOEdBUjhZIiwiZXhwaXJlX3RpbWUiOjE4MDM4NTkyMDAsImlubmVyX2FkZHIiOiIxOTIuMTY4LjExNy42OjcwNzAiLCJtYXhfcGxheV9kdXJhdGlvbiI6MCwic3RyZWFtX3R5cGUiOjAsInRlbmFudF9pZCI6IiIsInVzZXJfaWQiOiI1NGFiYjE1OTNlYzM0YmVkODFkOGIwMWRkNTc4MTY0ZSJ9.FXnunl2VLMFlcw4eK_kA1lmz7UxKBsvYpC8SpoOw4Yo')
+const playUrl = ref('')
 const streamMode = ref('live')
 const decodeType = ref(0)
 const volume = ref(1)
@@ -66,14 +57,12 @@ const codecReady = ref(false)
 const hasPlayer = ref(false)
 const isPaused = ref(false)
 const isTalking = ref(false)
-const talkUrl = ref('wss://mediadev02.cloudsee.com:20380/talk/12221S8GAR8Y?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfbW9kZSI6IlB1YmxpY0Nsb3VkIiwiY2hhbm5lbF9pZCI6MCwiZGV2aWNlX2lkIjoiMTIyMjFTOEdBUjhZIiwiZXhwaXJlX3RpbWUiOjE4MDM4NTkyMDAsImlubmVyX2FkZHIiOiIxOTIuMTY4LjExNy42OjcwNzAiLCJsaW5rX2tleSI6IjE3OTM4NDY0Mjc1MTE2OTYxNzIxOCIsIm1heF9wbGF5X2R1cmF0aW9uIjowLCJ0ZW5hbnRfaWQiOiIiLCJ1c2VyX2lkIjoiMDE0ZThmODg0OGVjNGNjNDk1NWJkYjc5ZTQ0MjA2NWYifQ.QABXQxcwq-eXpgxNL1tmA3GeAJjsavQuiybVfRiMSJA') // 与播放地址同款预填测试对讲流，弹窗内可改
+const talkUrl = ref('')
 const talkDialogVisible = ref(false)
 const isRecording = ref(false)
 const isDownloading = ref(false)
 const curTs = ref(null)
 const playSpeed = ref(1)
-const seekDialogVisible = ref(false)
-const seekTimeStr = ref('') // 跳播弹窗 datetime-local 值
 const downloadUrl = ref('')
 const downloadDialogVisible = ref(false)
 const metaInfo = ref(null)
@@ -255,11 +244,9 @@ function wireEvents(instance) {
   instance.on('download_over', () => {
     isDownloading.value = false
   })
-  instance.on('download_progress', () => {}) // 仅回执展示；订阅保留待 UI 补回
   instance.on('download_stopped', () => {
     isDownloading.value = false
   })
-  instance.on('recordered_one_file', () => {}) // 仅回执展示；订阅保留待 UI 补回
 }
 
 // ---------- 业务操作 ----------
@@ -271,7 +258,7 @@ async function onPlay() {
   if (!codecReady.value) {
     return
   }
-  // 直播地址可在 StreamSourceBar 获取或手动输入，回放用手动地址（回放取址待做）
+  // 直播地址可在 StreamSourceBar 获取或手动输入，回放地址由点击录像列表项取得（onPlayRecord 写入 playUrl）
   const target = isVod.value ? playUrl.value.trim() : await sourceBar.value.ensureUrl()
   if (!target || !isAllowedStreamUrl(target)) {
     return
@@ -430,31 +417,6 @@ function onSpeedChange() {
     return
   }
   webplayer.SetSpeed(Number(playSpeed.value)).catch((err) => console.warn('SetSpeed:', err))
-}
-
-function toDatetimeLocalValue(unixSeconds) {
-  const d = new Date(unixSeconds * 1000)
-  const pad = (n) => String(n).padStart(2, '0')
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  )
-}
-
-function onSeekClick() {
-  // 预填当前进度（GetCurTimestamp 为 unix 秒，见 demo的使用说明.md 2.2.12）
-  seekTimeStr.value = curTs.value > 1e9 ? toDatetimeLocalValue(curTs.value) : ''
-  seekDialogVisible.value = true
-}
-
-function onSeekConfirm() {
-  const ms = new Date(seekTimeStr.value).getTime()
-  if (!webplayer || !Number.isFinite(ms)) {
-    return
-  }
-  seekDialogVisible.value = false
-  // SetStartTime 取 unix 秒（demo的使用说明.md 2.2.6；是否再偏移时区由设备/平台侧决定）
-  webplayer.SetStartTime(Math.floor(ms / 1000)).catch((err) => console.warn('SetStartTime:', err))
 }
 
 function onToggleDownload() {
@@ -624,7 +586,6 @@ onUnmounted(() => {
         <RecordTimeline
           :cur-ts="curTs"
           :sections="timelineSections"
-          :range="timelineRange"
           :disabled="!timelineSections.length"
           @seek="onTimelineSeek"
         />
@@ -750,24 +711,6 @@ onUnmounted(() => {
       <div class="dialog-actions">
         <button class="btn" type="button" @click="talkDialogVisible = false">取消</button>
         <button class="btn btn-primary" type="button" :disabled="!talkUrl.trim()" @click="onTalkConfirm">确定</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 跳播弹窗（回放）：输入目标时刻，确定后 SetStartTime(unix 秒) -->
-  <div v-if="seekDialogVisible" class="dialog-mask" @click.self="seekDialogVisible = false">
-    <div class="dialog">
-      <div class="dialog-title">跳播</div>
-      <input
-        v-model="seekTimeStr"
-        class="input dialog-input"
-        type="datetime-local"
-        step="1"
-        @keyup.enter="onSeekConfirm"
-      />
-      <div class="dialog-actions">
-        <button class="btn" type="button" @click="seekDialogVisible = false">取消</button>
-        <button class="btn btn-primary" type="button" :disabled="!seekTimeStr" @click="onSeekConfirm">确定</button>
       </div>
     </div>
   </div>
