@@ -4,6 +4,10 @@ dist/
 .DS_Store
 *.log
 
+.env
+.env.*
+!.env.example
+
 /websdk
 
 # 本地开发文档，不入库
