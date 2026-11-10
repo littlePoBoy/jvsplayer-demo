@@ -583,12 +583,7 @@ onUnmounted(() => {
       <!-- 回放模式：暂停/播放、倍速、跳播、录像、下载（对讲为直播专属，不渲染） -->
       <template v-if="isVod">
         <!-- 第一行：进度条（官方 JTimeLine，红色段 = 有录像）；其下为控制按钮 -->
-        <RecordTimeline
-          :cur-ts="curTs"
-          :sections="timelineSections"
-          :disabled="!timelineSections.length"
-          @seek="onTimelineSeek"
-        />
+
         <button class="btn" type="button" :disabled="!hasPlayer && (!codecReady || !canPlay)" @click="onTogglePause">
           {{ !hasPlayer ? '播放' : isPaused ? '播放' : '暂停' }}
         </button>
@@ -622,6 +617,12 @@ onUnmounted(() => {
         <span class="field-label">音量</span>
         <input v-model.number="volume" type="range" min="0" max="1" step="0.01" @input="applyVolume" />
         <button class="btn" type="button" :disabled="!hasPlayer" @click="goFullscreen">全屏</button>
+        <RecordTimeline
+          :cur-ts="curTs"
+          :sections="timelineSections"
+          :disabled="!timelineSections.length"
+          @seek="onTimelineSeek"
+        />
       </template>
       <template v-else>
         <button
