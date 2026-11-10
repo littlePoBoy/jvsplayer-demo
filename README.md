@@ -24,17 +24,19 @@ npm run dev
 
 播放地址可以手填。顶栏「获取地址」会带 AccessToken、设备 SN、通道 ID 请求平台 openAPI，结果填回输入框。Token 只保存在本机浏览器 `localStorage`，不要写进代码或提交到仓库。
 
-开发时代理把页面请求的 `/openapi` 转到平台 openAPI，默认测试环境 `https://apitest.cloudsee.com:6443`。换成自己的环境：
+`/webplayer` 反代只为了在本 Demo 里演示浏览器如何请求开放平台接口（取实时地址、录像列表、回放地址）。开发服务器把页面上的 `/webplayer` 转到平台 openAPI，并去掉这个前缀；默认测试环境是 `https://apitest.cloudsee.com:6443`。换成自己的环境：
 
 ```bash
 cp .env.example .env
 # 编辑 OPENAPI_PROXY_TARGET
 ```
 
-`npm run build` 之后没有开发代理。静态站点需要自行把 `/openapi` 反代到 openAPI，并去掉这个前缀，例如：
+实际项目不要照搬这条反代。开放平台请求应按自己的网关、鉴权和路径来发，本 Demo 的 `/webplayer` 前缀、`vite` 代理和下面的 nginx 示例都只说明演示时请求是怎么走出去的。
+
+`npm run build` 之后没有开发代理。若只是把本 Demo 静态部署出来继续演示，需要自行把 `/webplayer` 反代到 openAPI，并去掉这个前缀，例如：
 
 ```nginx
-location /openapi/ {
+location /webplayer/ {
   proxy_pass https://your-openapi-host/;
   proxy_set_header Host $proxy_host;
 }

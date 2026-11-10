@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-const OPENAPI_BASE_URL = '/openapi'
+const OPENAPI_BASE_URL = '/webplayer'
 const DEFAULT_OPENAPI_PROXY_TARGET = 'https://apitest.cloudsee.com:6443'
 
 // base: './' 让构建产物可直接从任意相对路径部署（静态目录 / 内网 nginx）。
@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           // 测试环境证书不走系统信任链，开发代理跳过校验。
           secure: false,
-          rewrite: (path) => path.replace(/^\/openapi/, ''),
+          rewrite: (path) => path.replace(/^\/webplayer/, ''),
         },
       },
     },
