@@ -28,7 +28,7 @@ async function fetchUrl() {
   playUrl.value = ''
   const sn = deviceSn.value.trim()
   const channel = Number(channelId.value)
-  if (!token.value.trim() || !sn || !Number.isInteger(channel) || channel < 0) {
+  if (!token.value.trim() || !sn || channelId.value.trim() === '' || !Number.isInteger(channel) || channel < 0) {
     fetchError.value = '请填写 Token、设备 SN、通道 ID'
     return ''
   }

@@ -176,7 +176,7 @@ onUnmounted(() => {
 
     <template #overlay>
       <!-- hls.js 无截图/录像能力，不渲染对应按钮 -->
-      <button class="btn" type="button" :disabled="!hasPlayer && !hasSourceUrl" @click="togglePause">
+      <button class="btn" type="button" :disabled="!hasPlayer" @click="togglePause">
         {{ isPaused ? '播放' : '暂停' }}
       </button>
       <button class="btn" type="button" @click="toggleMute">
