@@ -1,5 +1,5 @@
 <script setup>
-// 说明页：双方案对比、许可、兼容、参考候选。内容依据 web-player-tech-scheme.md §3–§5。
+// 说明页：双方案对比、许可、兼容、参考候选。
 </script>
 
 <template>
