@@ -72,6 +72,7 @@ let webplayer = null
 let playerOptions = null // 构造 options；Play() 时从其读取 decodeType
 let progressTimer = null
 let metaTimer = null
+let leftPage = false // onMounted 的 await 回来时页面可能已卸载
 
 function normalizeSeconds(value) {
   // 兼容毫秒/秒两种时间戳
@@ -509,12 +510,22 @@ function goFullscreen() {
 // ---------- 生命周期 ----------
 
 onMounted(async () => {
-  capRows.value = await probeCapabilities()
+  const caps = await probeCapabilities()
+  if (leftPage) {
+    return
+  }
+  capRows.value = caps
   try {
     await loadScript(`${BASE_URL}websdk/JWebPlayer.bundle.js`)
   } catch (err) {
     // 加载失败通常是部署问题，保留提示文本便于排查
-    console.warn(`websdk 加载失败：${err.message}。请确认 SDK 文件已部署到 public/websdk/。`)
+    if (!leftPage) {
+      console.warn(`websdk 加载失败：${err.message}。请确认 SDK 文件已部署到 public/websdk/。`)
+    }
+    return
+  }
+  // 脚本加载期间用户可能已离开页面；loadScript 的 Promise 有缓存，不能取消
+  if (leftPage || !containerEl.value) {
     return
   }
   playerOptions = {
@@ -527,6 +538,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  leftPage = true
   stopProgressPolling()
   stopMetaPolling()
   if (!webplayer) {
