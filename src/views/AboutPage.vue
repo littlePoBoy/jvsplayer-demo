@@ -5,7 +5,7 @@
 <template>
   <div class="about">
     <section>
-      <h2>双方案对比</h2>
+      <h2>flv/hls双方案对比</h2>
       <table class="about-table">
         <thead>
           <tr>
@@ -43,8 +43,7 @@
               H.264，软解体验弱于全能播放器
             </td>
             <td>
-              ① 自定义许可，客户法务沟通成本高 ② 与「单一协议最小依赖」目标不同构，体积/复杂度更大 ③
-              维护与 API 风格不如 mpegts/hls 两件套「行业默认」
+              ① 与「单一协议最小依赖」目标不同构，体积/复杂度更大 ②维护与 API 风格不如 mpegts/hls 两件套「行业默认」
             </td>
           </tr>
           <tr>
@@ -62,31 +61,22 @@
 
       <h3>选型建议</h3>
       <ol>
-        <li>默认跟方案 A：协议清晰、许可省心、对接成本低。</li>
-        <li>目标机型 H.265 硬解差、又必须 HEVC：评估方案 B 或自研 WASM（可对齐公司 websdk 降级策略）。</li>
-        <li>公司私协 / 对讲 / 回放业务：只用 websdk，不与开源方案混用一套实例。</li>
+        <li>如果只是在pc web上播放，首选websdk，兼容性好，功能齐全，播放延迟低。</li>
+        <li>flv/hls选型 默认跟方案 A：协议清晰、许可省心、对接成本低。</li>
+        <li>想要兼容性好，要支持h5、H265：评估方案 B 。</li>
       </ol>
     </section>
-
     <section>
-      <h2>H.265 与兼容策略（Demo 统一口径）</h2>
-      <ol>
-        <li>播放前探测 MSE HEVC / 浏览器能力，结果展示在右侧信息栏。</li>
+      <h2>websdk（私协页）要点</h2>
+      <ul>
+        <li>单 WebPlayer 实例同时承担直播、回放、对讲、下载、录像，不要多建。</li>
+        <li>每次播放前调 <code>SetVolume</code>、每次对讲前调 <code>SetMicVolume</code>，避免残留值。</li>
         <li>
-          方案 A：硬解优先（MSE/系统解码器）；失败时明确提示（换浏览器 / 切 H.264 / 看对照页），不做软解兜底。
+          回放进度条使用的JTimeLine 组件不属于 websdk，仅作参考，可以使用其他方案。以 <code>GetCurTimestamp()</code> 驱动，
+          <code>SetStartTime()</code> 跳转。
         </li>
-        <li>方案 B：按 h265web.js 自身硬解→软解能力演示「能播」上限（代价是包体、CPU、发热）。</li>
-        <li>iOS：H.264 必过，H.265 尽力。</li>
-      </ol>
-      <h3>验收矩阵</h3>
-      <p>Chrome / Edge、Firefox、Safari、Android Chrome、iOS Safari（微信内置单测）。</p>
-      <h3>多线程软解说明（h265web.js）</h3>
-      <p>
-        WASM 多线程软解需要页面跨源隔离（COOP/COEP 响应头）；未开启时自动使用单线程软解。本 Demo
-        默认不加跨源隔离头（避免影响跨域测试流），如需多线程请在部署层（如 nginx）配置：
-        <code>Cross-Origin-Opener-Policy: same-origin</code> /
-        <code>Cross-Origin-Embedder-Policy: require-corp</code>。
-      </p>
+        <li>兼容基线：Chrome 85+、Firefox 82.0.3+；支持 H.264/H.265、G.711/AAC。</li>
+      </ul>
     </section>
 
     <section>
@@ -122,7 +112,7 @@
           <tr>
             <td>公司 websdk</td>
             <td>闭源</td>
-            <td>随本仓库提供，供平台集成参考；使用范围以平台授权为准。</td>
+            <td>随本仓库提供，供平台集成参考。</td>
           </tr>
         </tbody>
       </table>
@@ -186,19 +176,7 @@
       </p>
     </section>
 
-    <section>
-      <h2>websdk（私协页）要点</h2>
-      <ul>
-        <li>单 WebPlayer 实例同时承担直播、回放、对讲、下载、录像，不要多建。</li>
-        <li><code>codec_loaded</code> 事件是前置门槛：未触发前直播 / 对讲 / 回放均不可用。</li>
-        <li>每次播放前调 <code>SetVolume</code>、每次对讲前调 <code>SetMicVolume</code>，避免残留值。</li>
-        <li>
-          回放进度条自研（官方 JTimeLine 组件不属于 websdk）：以 <code>GetCurTimestamp()</code> 驱动，
-          <code>SetStartTime()</code> 跳转。
-        </li>
-        <li>兼容基线（厂商口径）：Chrome 85+、Firefox 82.0.3+；支持 H.264/H.265、G.711/AAC。</li>
-      </ul>
-    </section>
+
   </div>
 </template>
 
