@@ -174,7 +174,7 @@ defineExpose({ ensureUrl })
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 420px;
+  flex: 1 1 220px;
   min-width: 300px;
 }
 

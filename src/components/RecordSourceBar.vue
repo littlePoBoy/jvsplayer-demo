@@ -120,7 +120,7 @@ defineExpose({ getPlaybackUrl })
     />
     <input v-model="queryDate" class="input" type="date" @keyup.enter="fetchRecords" />
     <button class="btn" type="button" :disabled="loading" @click="fetchRecords">
-      {{ loading ? '获取中…' : '获取录像文件列表' }}
+      {{ loading ? '获取中…' : '录像文件列表' }}
     </button>
     <span v-if="fetchError" class="url-error fetch-error" :title="fetchError">{{ fetchError }}</span>
   </div>
