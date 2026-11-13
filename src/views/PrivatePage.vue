@@ -49,6 +49,7 @@ const recordTotal = ref(0)
 const activeRecordKey = ref('')
 const hasSourceUrl = ref(false)
 const playUrl = ref('')
+const playUrlCopied = ref(false)
 const streamMode = ref('live')
 const decodeType = ref(0)
 const volume = ref(1)
@@ -259,7 +260,7 @@ async function onPlay() {
   if (!codecReady.value) {
     return
   }
-  // 直播地址可在 StreamSourceBar 获取或手动输入，回放地址由点击录像列表项取得（onPlayRecord 写入 playUrl）
+  // 直播地址来自 StreamSourceBar（获取或手动输入）；回放地址来自顶栏输入框（点击录像写入，也可手动输入）
   const target = isVod.value ? playUrl.value.trim() : await sourceBar.value.ensureUrl()
   if (!target || !isAllowedStreamUrl(target)) {
     return
@@ -352,11 +353,27 @@ async function onPlayRecord(rec) {
   }
   activeRecordKey.value = recordKey(rec)
   playUrl.value = url
+  playUrlCopied.value = false
   // 切换录像前先停掉当前播放（Stop 同步；media_play_stopped 早于 Play 返回，不会覆盖 onPlay 的状态）
   if (hasPlayer.value || isDownloading.value || isRecording.value) {
     onStop()
   }
   await onPlay()
+}
+
+// 用户改地址后，高亮的录像不再对应当前地址
+function onPlayUrlInput() {
+  activeRecordKey.value = ''
+}
+
+function copyPlayUrl() {
+  navigator.clipboard
+    .writeText(playUrl.value.trim())
+    .then(() => {
+      playUrlCopied.value = true
+      setTimeout(() => (playUrlCopied.value = false), 1500)
+    })
+    .catch((err) => console.warn('复制失败：', err))
 }
 
 function onStop() {
@@ -569,6 +586,23 @@ onUnmounted(() => {
         v-model:records="records"
         v-model:total="recordTotal"
       />
+      <!-- display:contents：地址框与复制按钮直接参与顶栏 flex；v-show 隐藏时恢复为 none -->
+      <div v-show="isVod" class="vod-url">
+        <div class="source-url-group">
+          <input
+            v-model="playUrl"
+            class="input source-url"
+            type="text"
+            placeholder="点击录像获取地址，或手动输入"
+            :title="playUrl"
+            @input="onPlayUrlInput"
+            @keyup.enter="onPlay"
+          />
+        </div>
+        <button class="btn" type="button" :disabled="!playUrl.trim()" @click="copyPlayUrl">
+          {{ playUrlCopied ? '已复制' : '复制' }}
+        </button>
+      </div>
       <StreamSourceBar
         v-show="!isVod"
         ref="sourceBar"
@@ -748,6 +782,22 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.vod-url {
+  display: contents;
+}
+
+.source-url-group {
+  display: flex;
+  align-items: center;
+  flex: 1 1 420px;
+  min-width: 300px;
+}
+
+.source-url {
+  flex: 1 1 180px;
+  min-width: 120px;
+}
+
 .record-panel {
 
   padding-left: 12px;

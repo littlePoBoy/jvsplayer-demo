@@ -91,7 +91,11 @@ async function getPlaybackUrl(record) {
       startTime: record.startTime,
       endTime: record.endTime,
     })
-    return data?.url ?? ''
+    const url = data?.url ?? ''
+    if (!url) {
+      fetchError.value = '获取回放地址失败：接口未返回播放地址'
+    }
+    return url
   } catch (err) {
     fetchError.value = `获取回放地址失败：${err.message}`
     return ''
